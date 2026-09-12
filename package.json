@@ -1,0 +1,16 @@
+{
+  "name": "rik-ride",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RIK-RIDE Application Workspace",
+  "scripts": {
+    "client:web": "npm --prefix client run web",
+    "client:android": "npm --prefix client run android",
+    "server:dev": "npm --prefix server run dev",
+    "server:build": "npm --prefix server run build"
+  },
+  "workspaces": [
+    "client",
+    "server"
+  ]
+}

@@ -19,6 +19,13 @@ export const ProtectedGuard: React.FC<ProtectedGuardProps> = ({ children }) => {
   const { activeRole, setActiveRole } = useRouter();
   const { colors } = useTheme();
 
+  // Auto-synchronize router activeRole to authenticated user's assigned role
+  React.useEffect(() => {
+    if (user?.role && user.role !== activeRole) {
+      setActiveRole(user.role);
+    }
+  }, [user?.role]);
+
   if (authState === 'loading') {
     return <LoadingState message="Restoring RIK-RIDE session..." />;
   }

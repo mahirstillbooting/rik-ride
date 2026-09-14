@@ -7,6 +7,7 @@ import { socketManager } from './sockets/socketManager';
 import { qrService } from './services/qrService';
 import authRoutes from './routes/authRoutes';
 import adminRoutes from './routes/adminRoutes';
+import garageRoutes from './routes/garageRoutes';
 
 validateEnv();
 
@@ -19,6 +20,7 @@ app.use(express.json());
 // Register API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/garage', garageRoutes);
 
 // Health & Verification Endpoint
 app.get('/api/health', (_req, res) => {

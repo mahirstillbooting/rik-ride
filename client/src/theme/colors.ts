@@ -1,7 +1,7 @@
 /**
  * RIK-RIDE Design System Color Tokens
- * Dark-first transportation & ride-platform theme
- * Refined palette: Near-black/charcoal dark theme with vibrant orange accents
+ * Unified Brand Identity: Black / Charcoal / Neutral Greys / Off-White / Vibrant Orange
+ * STRICT RULE: ZERO BLUE OR BLUE-ADJACENT SHADES IN EITHER DARK OR LIGHT THEME.
  */
 
 export interface ThemeColors {
@@ -40,16 +40,16 @@ export interface ThemeColors {
 }
 
 export const darkColors: ThemeColors = {
-  background: '#090C10',
-  surface: '#111620',
-  surfaceElevated: '#19202E',
-  surfaceHover: '#1F2839',
-  border: '#222B3D',
-  borderSubtle: '#161D2A',
+  background: '#090A0C',
+  surface: '#121417',
+  surfaceElevated: '#181B1F',
+  surfaceHover: '#22262C',
+  border: '#22252B',
+  borderSubtle: '#191C20',
 
   textPrimary: '#F8FAFC',
-  textSecondary: '#94A3B8',
-  textMuted: '#64748B',
+  textSecondary: '#9EA3AE',
+  textMuted: '#6C727F',
 
   primary: '#F97316',
   primaryHover: '#EA580C',
@@ -59,7 +59,7 @@ export const darkColors: ThemeColors = {
   accentSurface: 'rgba(249, 115, 22, 0.14)',
   accentGlow: 'rgba(249, 115, 22, 0.22)',
 
-  cardHeroBg: '#181412',
+  cardHeroBg: '#161311',
   cardHeroBorder: 'rgba(249, 115, 22, 0.35)',
 
   success: '#10B981',
@@ -71,31 +71,31 @@ export const darkColors: ThemeColors = {
   info: '#F97316',
   infoSurface: 'rgba(249, 115, 22, 0.14)',
 
-  overlay: 'rgba(9, 12, 16, 0.82)',
+  overlay: 'rgba(9, 10, 12, 0.82)',
 };
 
 export const lightColors: ThemeColors = {
-  background: '#F8FAFC',
+  background: '#FAFAFA',
   surface: '#FFFFFF',
-  surfaceElevated: '#F1F5F9',
-  surfaceHover: '#F1F5F9',
-  border: '#E2E8F0',
-  borderSubtle: '#F1F5F9',
+  surfaceElevated: '#F4F4F5',
+  surfaceHover: '#EFEFF1',
+  border: '#E4E4E7',
+  borderSubtle: '#F4F4F5',
 
-  textPrimary: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#94A3B8',
+  textPrimary: '#111315',
+  textSecondary: '#52525B',
+  textMuted: '#71717A',
 
-  primary: '#0284C7',
-  primaryHover: '#0369A1',
+  primary: '#F97316',
+  primaryHover: '#EA580C',
   primaryForeground: '#FFFFFF',
 
-  accent: '#0EA5E9',
-  accentSurface: 'rgba(14, 165, 233, 0.08)',
-  accentGlow: 'rgba(14, 165, 233, 0.15)',
+  accent: '#F97316',
+  accentSurface: 'rgba(249, 115, 22, 0.08)',
+  accentGlow: 'rgba(249, 115, 22, 0.15)',
 
-  cardHeroBg: '#F0F9FF',
-  cardHeroBorder: '#BAE6FD',
+  cardHeroBg: '#FFF7ED',
+  cardHeroBorder: '#FFEDD5',
 
   success: '#059669',
   successSurface: 'rgba(5, 150, 105, 0.08)',
@@ -103,8 +103,8 @@ export const lightColors: ThemeColors = {
   warningSurface: 'rgba(217, 119, 6, 0.08)',
   danger: '#DC2626',
   dangerSurface: 'rgba(220, 38, 38, 0.08)',
-  info: '#2563EB',
-  infoSurface: 'rgba(37, 99, 235, 0.08)',
+  info: '#F97316',
+  infoSurface: 'rgba(249, 115, 22, 0.08)',
 
-  overlay: 'rgba(15, 23, 42, 0.5)',
+  overlay: 'rgba(17, 19, 21, 0.5)',
 };

@@ -96,7 +96,7 @@ export const RoleViewContainer: React.FC = () => {
             <CardHeader
               title={`${currentRoleConfig.displayName} Command Center`}
               subtitle={`Operating Mode: ${currentRoleConfig.role}`}
-              action={<Badge label="Refined Theme" variant="info" />}
+              action={<Badge label="Unified Theme" variant="info" />}
             />
             <CardBody style={styles.heroBody}>
               <View style={styles.heroStatsRow}>
@@ -139,12 +139,12 @@ export const RoleViewContainer: React.FC = () => {
               />
               <CardBody>
                 <Text style={[styles.cardText, { color: colors.textSecondary }]}>
-                  Demonstrating surface stacking depth between background (#090C10), primary surface (#111620), and elevated surface (#19202E).
+                  Demonstrating surface stacking depth between background (#090A0C), primary surface (#121417), and elevated surface (#181B1F).
                 </Text>
                 <View style={styles.badgeRow}>
-                  <Badge label="Near-Black" variant="neutral" />
-                  <Badge label="Charcoal" variant="neutral" />
-                  <Badge label="Orange Accent" variant="info" />
+                  <Badge label="Matte Black" variant="neutral" />
+                  <Badge label="Neutral Charcoal" variant="neutral" />
+                  <Badge label="Vibrant Orange" variant="info" />
                 </View>
               </CardBody>
               <CardFooter>
@@ -222,7 +222,7 @@ export const RoleViewContainer: React.FC = () => {
         }
       >
         <Text style={[styles.modalBodyText, { color: colors.textPrimary }]}>
-          This modal dialog presents crisp dark charcoal surfaces, clean borders, and responsive actions across Web and Mobile viewports.
+          This modal dialog presents crisp neutral dark charcoal surfaces, clean borders, and responsive actions across Web and Mobile viewports.
         </Text>
       </Modal>
     </View>

@@ -7,6 +7,7 @@ import {
   ViewStyle,
   TextStyle,
   StyleProp,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { borderRadius, spacing } from '../../theme/spacing';
@@ -44,13 +45,13 @@ export const Button: React.FC<ButtonProps> = ({
       case 'secondary':
         return {
           bg: colors.surfaceHover,
-          border: 'transparent',
+          border: colors.borderSubtle,
           text: colors.textPrimary,
         };
       case 'outline':
         return {
           bg: 'transparent',
-          border: colors.border,
+          border: colors.borderStrong,
           text: colors.textPrimary,
         };
       case 'ghost':
@@ -78,21 +79,28 @@ export const Button: React.FC<ButtonProps> = ({
   const getSizePadding = () => {
     switch (size) {
       case 'sm':
-        return { py: spacing.xs, px: spacing.sm, font: 13, height: 34 };
+        return { py: spacing.xs, px: spacing.sm, font: 12, height: 36 };
       case 'lg':
-        return { py: spacing.md, px: spacing.lg, font: 16, height: 50 };
+        return { py: spacing.md, px: spacing.lg, font: 15, height: 48 };
       case 'md':
       default:
-        return { py: spacing.sm, px: spacing.md, font: 14, height: 42 };
+        return { py: spacing.sm, px: spacing.md, font: 13, height: 42 };
     }
   };
 
   const { bg, border, text } = getVariantStyles();
   const { py, px, font, height } = getSizePadding();
 
+  const webButtonStyle = Platform.OS === 'web'
+    ? {
+        cursor: disabled || loading ? 'not-allowed' : 'pointer',
+        transition: 'background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, transform 0.1s ease-in-out',
+      }
+    : {};
+
   return (
     <TouchableOpacity
-      activeOpacity={0.8}
+      activeOpacity={0.85}
       onPress={onPress}
       disabled={disabled || loading}
       style={[
@@ -106,6 +114,7 @@ export const Button: React.FC<ButtonProps> = ({
           height,
           opacity: disabled ? 0.5 : 1,
         },
+        webButtonStyle as any,
         style,
       ]}
     >
@@ -129,10 +138,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
+    gap: spacing.xs + 2,
   },
   text: {
-    fontWeight: '600',
+    fontWeight: '700',
     letterSpacing: 0.2,
   },
 });
+

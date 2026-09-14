@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useBreakpoint } from '../../theme/breakpoints';
 import { borderRadius, spacing } from '../../theme/spacing';
 import { UserRole } from '../../navigation/roleConfig';
+import { Icon } from '../ui/Icon';
 
 interface HeaderProps {
   onToggleMobileMenu?: () => void;
@@ -19,7 +20,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
 
   const roleOptions: { label: string; value: UserRole }[] = [
     { label: 'Passenger', value: 'PASSENGER' },
-    { label: 'Self-Owned Driver', value: 'INDEPENDENT_DRIVER' },
+    { label: 'Self Driver', value: 'INDEPENDENT_DRIVER' },
     { label: 'Garage Driver', value: 'GARAGE_DRIVER' },
     { label: 'Garage Owner', value: 'GARAGE_OWNER' },
     { label: 'Admin', value: 'ADMIN' },
@@ -33,14 +34,15 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
             onPress={onToggleMobileMenu}
             style={[styles.iconButton, { backgroundColor: colors.surfaceHover }]}
           >
-            <Text style={{ color: colors.textPrimary, fontSize: 18 }}>☰</Text>
+            <Icon name="grid" size={18} color={colors.textPrimary} />
           </TouchableOpacity>
         )}
 
         <View style={styles.brandContainer}>
+          <View style={[styles.brandDot, { backgroundColor: colors.primary }]} />
           <Text style={[styles.brandText, { color: colors.primary }]}>RIK-RIDE</Text>
           <Text style={[styles.brandTag, { color: colors.textMuted }]}>
-            {authState === 'authenticated' && user ? `${user.role}` : 'Auth Foundation'}
+            {authState === 'authenticated' && user ? `${user.role}` : 'Platform Identity'}
           </Text>
         </View>
       </View>
@@ -66,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
                   <Text
                     style={[
                       styles.roleChipText,
-                      { color: isActive ? colors.accent : colors.textSecondary, fontWeight: isActive ? '700' : '500' },
+                      { color: isActive ? colors.primary : colors.textSecondary, fontWeight: isActive ? '700' : '500' },
                     ]}
                   >
                     {opt.label}
@@ -90,6 +92,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
               onPress={logout}
               style={[styles.logoutBtn, { backgroundColor: colors.surfaceHover, borderColor: colors.border }]}
             >
+              <Icon name="log-out" size={14} color={colors.danger} />
               <Text style={[styles.logoutText, { color: colors.danger }]}>Sign Out</Text>
             </TouchableOpacity>
           </View>
@@ -100,8 +103,9 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
           onPress={toggleTheme}
           style={[styles.themeToggle, { backgroundColor: colors.surfaceHover, borderColor: colors.border }]}
         >
-          <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
-            {mode === 'dark' ? '☀️ Light' : '🌙 Dark'}
+          <Icon name={mode === 'dark' ? 'sun' : 'moon'} size={14} color={colors.textPrimary} />
+          <Text style={[styles.themeToggleText, { color: colors.textPrimary }]}>
+            {mode === 'dark' ? 'Light' : 'Dark'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -126,8 +130,13 @@ const styles = StyleSheet.create({
   },
   brandContainer: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: spacing.xs,
+  },
+  brandDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   brandText: {
     fontSize: 20,
@@ -139,6 +148,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    marginLeft: 4,
   },
   rightSection: {
     flexDirection: 'row',
@@ -183,6 +193,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,
@@ -193,13 +206,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   themeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,
     borderWidth: 1,
+  },
+  themeToggleText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   iconButton: {
     padding: spacing.xs,
     borderRadius: borderRadius.sm,
   },
 });
+

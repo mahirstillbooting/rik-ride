@@ -10,6 +10,7 @@ import { useTheme } from '../../theme/ThemeContext';
 import { useRouter } from '../../navigation/RouterContext';
 import { borderRadius, spacing, shadows } from '../../theme/spacing';
 import { UserRole } from '../../navigation/roleConfig';
+import { Icon } from '../ui/Icon';
 
 interface MobileNavProps {
   drawerVisible: boolean;
@@ -26,7 +27,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
 
   const roleOptions: { label: string; value: UserRole }[] = [
     { label: 'Passenger', value: 'PASSENGER' },
-    { label: 'Self-Owned Driver', value: 'INDEPENDENT_DRIVER' },
+    { label: 'Self Driver', value: 'INDEPENDENT_DRIVER' },
     { label: 'Garage Driver', value: 'GARAGE_DRIVER' },
     { label: 'Garage Owner', value: 'GARAGE_OWNER' },
     { label: 'Admin', value: 'ADMIN' },
@@ -49,9 +50,11 @@ export const MobileNav: React.FC<MobileNavProps> = ({
               onPress={() => setActiveRouteId(item.id)}
               style={styles.bottomNavItem}
             >
-              <Text style={{ color: isActive ? colors.primary : colors.textMuted, fontSize: 16 }}>
-                ●
-              </Text>
+              <Icon
+                name={item.iconName}
+                size={18}
+                color={isActive ? colors.primary : colors.textMuted}
+              />
               <Text
                 style={[
                   styles.bottomNavText,
@@ -94,7 +97,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                 Switch Role & Navigation
               </Text>
               <TouchableOpacity onPress={onCloseDrawer}>
-                <Text style={{ color: colors.textMuted, fontSize: 18 }}>✕</Text>
+                <Icon name="x" size={20} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
@@ -116,9 +119,9 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                       styles.roleCard,
                       {
                         backgroundColor: isActive
-                          ? colors.accentSurface
+                          ? colors.primarySurface
                           : colors.background,
-                        borderColor: isActive ? colors.accent : colors.border,
+                        borderColor: isActive ? colors.primaryBorder : colors.border,
                       },
                     ]}
                   >
@@ -126,7 +129,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                       style={[
                         styles.roleCardText,
                         {
-                          color: isActive ? colors.accent : colors.textPrimary,
+                          color: isActive ? colors.primary : colors.textPrimary,
                           fontWeight: isActive ? '700' : '500',
                         },
                       ]}
@@ -160,16 +163,21 @@ export const MobileNav: React.FC<MobileNavProps> = ({
                     styles.drawerNavItem,
                     {
                       backgroundColor: isActive
-                        ? colors.accentSurface
+                        ? colors.primarySurface
                         : 'transparent',
                     },
                   ]}
                 >
+                  <Icon
+                    name={item.iconName}
+                    size={16}
+                    color={isActive ? colors.primary : colors.textMuted}
+                  />
                   <Text
                     style={[
                       styles.drawerNavLabel,
                       {
-                        color: isActive ? colors.accent : colors.textPrimary,
+                        color: isActive ? colors.primary : colors.textPrimary,
                         fontWeight: isActive ? '700' : '500',
                       },
                     ]}
@@ -188,7 +196,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({
 
 const styles = StyleSheet.create({
   bottomNav: {
-    height: 56,
+    height: 58,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
@@ -200,10 +208,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 4,
+    gap: 2,
   },
   bottomNavText: {
     fontSize: 10,
-    marginTop: 2,
+    marginTop: 1,
   },
   modalOverlay: {
     flex: 1,
@@ -245,6 +254,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   drawerNavItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
     borderRadius: borderRadius.md,
@@ -254,3 +266,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+

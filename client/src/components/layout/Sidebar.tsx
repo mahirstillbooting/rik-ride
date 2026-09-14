@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { useRouter } from '../../navigation/RouterContext';
 import { borderRadius, spacing } from '../../theme/spacing';
+import { Icon } from '../ui/Icon';
 
 export const Sidebar: React.FC = () => {
   const { colors } = useTheme();
@@ -22,6 +23,13 @@ export const Sidebar: React.FC = () => {
       <View style={styles.navList}>
         {currentRoleConfig.navItems.map((item) => {
           const isActive = item.id === activeRouteId;
+          const webItemStyle = Platform.OS === 'web'
+            ? {
+                transition: 'background-color 0.15s ease-in-out, border-color 0.15s ease-in-out',
+                cursor: 'pointer',
+              }
+            : {};
+
           return (
             <TouchableOpacity
               key={item.id}
@@ -30,21 +38,24 @@ export const Sidebar: React.FC = () => {
               style={[
                 styles.navItem,
                 {
-                  backgroundColor: isActive ? colors.accentSurface : 'transparent',
-                  borderColor: isActive ? colors.accent : 'transparent',
+                  backgroundColor: isActive ? colors.primarySurface : 'transparent',
+                  borderColor: isActive ? colors.primaryBorder : 'transparent',
                   borderWidth: isActive ? 1 : 0,
                 },
+                webItemStyle as any,
               ]}
             >
               <View style={styles.navItemContent}>
-                <Text style={{ color: isActive ? colors.accent : colors.textMuted, fontSize: 10 }}>
-                  ●
-                </Text>
+                <Icon
+                  name={item.iconName}
+                  size={16}
+                  color={isActive ? colors.primary : colors.textMuted}
+                />
                 <Text
                   style={[
                     styles.navLabel,
                     {
-                      color: isActive ? colors.accent : colors.textSecondary,
+                      color: isActive ? colors.primary : colors.textSecondary,
                       fontWeight: isActive ? '700' : '500',
                     },
                   ]}
@@ -54,8 +65,8 @@ export const Sidebar: React.FC = () => {
               </View>
 
               {item.badgeText && (
-                <View style={[styles.badge, { backgroundColor: colors.warningSurface }]}>
-                  <Text style={[styles.badgeText, { color: colors.warning }]}>
+                <View style={[styles.badge, { backgroundColor: colors.primarySurface, borderColor: colors.primaryBorder }]}>
+                  <Text style={[styles.badgeText, { color: colors.primary }]}>
                     {item.badgeText}
                   </Text>
                 </View>
@@ -70,7 +81,7 @@ export const Sidebar: React.FC = () => {
 
 const styles = StyleSheet.create({
   sidebar: {
-    width: 240,
+    width: 230,
     borderRightWidth: 1,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.sm,
@@ -83,21 +94,22 @@ const styles = StyleSheet.create({
   },
   roleTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   roleDesc: {
     fontSize: 11,
-    marginTop: 2,
-    lineHeight: 14,
+    marginTop: 3,
+    lineHeight: 15,
   },
   navList: {
-    gap: spacing.xs,
+    gap: 4,
   },
   navItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.sm,
+    paddingVertical: 9,
     paddingHorizontal: spacing.sm,
     borderRadius: borderRadius.md,
   },
@@ -108,14 +120,17 @@ const styles = StyleSheet.create({
   },
   navLabel: {
     fontSize: 13,
+    letterSpacing: 0.1,
   },
   badge: {
     paddingHorizontal: spacing.xs,
     paddingVertical: 2,
     borderRadius: borderRadius.full,
+    borderWidth: 1,
   },
   badgeText: {
     fontSize: 10,
     fontWeight: '700',
   },
 });
+

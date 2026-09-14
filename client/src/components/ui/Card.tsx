@@ -1,20 +1,27 @@
 import React, { ReactNode } from 'react';
-import { View, Text, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { View, Text, StyleSheet, StyleProp, ViewStyle, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { borderRadius, spacing, shadows } from '../../theme/spacing';
+import { GradientView } from './GradientView';
 
-export type CardVariant = 'default' | 'elevated' | 'hero' | 'highlight';
+export type CardVariant = 'default' | 'elevated' | 'hero' | 'highlight' | 'warning' | 'danger';
 
 export interface CardProps {
   children: ReactNode;
   variant?: CardVariant;
+  showAccentBar?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
-export const Card: React.FC<CardProps> = ({ children, variant = 'default', style }) => {
+export const Card: React.FC<CardProps> = ({
+  children,
+  variant = 'default',
+  showAccentBar = false,
+  style,
+}) => {
   const { colors, mode } = useTheme();
 
-  const getCardStyle = (): { bg: string; border: string; glow?: string } => {
+  const getCardStyle = (): { bg: string; border: string; accentBar?: string } => {
     switch (variant) {
       case 'elevated':
         return {
@@ -25,13 +32,23 @@ export const Card: React.FC<CardProps> = ({ children, variant = 'default', style
         return {
           bg: colors.cardHeroBg,
           border: colors.cardHeroBorder,
-          glow: mode === 'dark' ? colors.accentGlow : undefined,
+          accentBar: colors.primary,
         };
       case 'highlight':
         return {
           bg: colors.surface,
-          border: colors.accent,
-          glow: mode === 'dark' ? colors.accentGlow : undefined,
+          border: colors.primaryBorder,
+          accentBar: colors.primary,
+        };
+      case 'warning':
+        return {
+          bg: colors.warningSurface,
+          border: colors.warning,
+        };
+      case 'danger':
+        return {
+          bg: colors.dangerSurface,
+          border: colors.danger,
         };
       case 'default':
       default:
@@ -42,7 +59,15 @@ export const Card: React.FC<CardProps> = ({ children, variant = 'default', style
     }
   };
 
-  const { bg, border, glow } = getCardStyle();
+  const { bg, border, accentBar } = getCardStyle();
+  const effectiveAccentBar = showAccentBar ? colors.primary : accentBar;
+
+  const webCardStyle = Platform.OS === 'web'
+    ? {
+        boxShadow: mode === 'dark' ? '0 4px 20px rgba(0, 0, 0, 0.35)' : '0 4px 12px rgba(0, 0, 0, 0.05)',
+        transition: 'transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out, border-color 0.15s ease-in-out',
+      }
+    : {};
 
   return (
     <View
@@ -53,10 +78,13 @@ export const Card: React.FC<CardProps> = ({ children, variant = 'default', style
           borderColor: border,
         },
         shadows.sm,
-        glow ? { shadowColor: colors.primary, shadowOpacity: 0.18, shadowRadius: 8 } : null,
+        webCardStyle as any,
         style,
       ]}
     >
+      {effectiveAccentBar && (
+        <View style={[styles.accentBar, { backgroundColor: effectiveAccentBar }]} />
+      )}
       {children}
     </View>
   );
@@ -66,19 +94,29 @@ export interface CardHeaderProps {
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  icon?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }
 
-export const CardHeader: React.FC<CardHeaderProps> = ({ title, subtitle, action, style }) => {
+export const CardHeader: React.FC<CardHeaderProps> = ({
+  title,
+  subtitle,
+  action,
+  icon,
+  style,
+}) => {
   const { colors } = useTheme();
 
   return (
     <View style={[styles.header, { borderBottomColor: colors.borderSubtle }, style]}>
-      <View style={styles.titleContainer}>
-        <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
-        {subtitle && (
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
-        )}
+      <View style={styles.headerTitleRow}>
+        {icon && <View style={styles.headerIconWrapper}>{icon}</View>}
+        <View style={styles.titleContainer}>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
+          {subtitle && (
+            <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
+          )}
+        </View>
       </View>
       {action && <View style={styles.actionContainer}>{action}</View>}
     </View>
@@ -108,24 +146,39 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: 'hidden',
   },
+  accentBar: {
+    height: 3,
+    width: '100%',
+  },
   header: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
   },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: spacing.xs + 2,
+  },
+  headerIconWrapper: {
+    marginRight: 2,
+  },
   titleContainer: {
     flex: 1,
   },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    letterSpacing: 0.2,
+    letterSpacing: -0.1,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 2,
+    lineHeight: 16,
   },
   actionContainer: {
     marginLeft: spacing.sm,
@@ -134,10 +187,12 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   footer: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderTopWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
+    gap: spacing.xs,
   },
 });

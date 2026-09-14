@@ -6,17 +6,18 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { useRouter } from '../navigation/RouterContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
-import { Card, CardHeader, CardBody, CardFooter } from '../components/ui/Card';
+import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Badge } from '../components/ui/Badge';
+import { Icon } from '../components/ui/Icon';
+import { GradientView } from '../components/ui/GradientView';
+import { MapContainer } from '../components/ui/MapContainer';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
@@ -132,7 +133,7 @@ export const AdminDashboardView: React.FC = () => {
     switch (status) {
       case 'ACTIVE':
       case 'APPROVED':
-        return <Badge label="ACTIVE / APPROVED" variant="success" />;
+        return <Badge label="ACTIVE" variant="success" />;
       case 'PENDING':
         return <Badge label="PENDING REVIEW" variant="warning" />;
       case 'REJECTED':
@@ -144,12 +145,14 @@ export const AdminDashboardView: React.FC = () => {
     }
   };
 
-  // Render Sub-Views based on currentNavItem.id
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
       <View style={styles.container}>
-        {/* Top Command Bar Header */}
-        <View style={[styles.commandHeader, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {/* Top Command Bar Header with Gradient Accent */}
+        <GradientView
+          preset="accentHero"
+          style={[styles.commandHeader, { borderColor: colors.border }]}
+        >
           <View style={styles.commandHeaderTitleRow}>
             <View style={[styles.headerAccentDot, { backgroundColor: colors.primary }]} />
             <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>
@@ -157,9 +160,9 @@ export const AdminDashboardView: React.FC = () => {
             </Text>
           </View>
           <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-            Central Authority Monitoring & Operations Control
+            Central Operational Monitoring & Entity Approval Workflows
           </Text>
-        </View>
+        </GradientView>
 
         {errorMsg && (
           <ErrorState
@@ -170,7 +173,7 @@ export const AdminDashboardView: React.FC = () => {
         )}
 
         {loading ? (
-          <LoadingState message="Fetching live MongoDB database data..." />
+          <LoadingState message="Connecting to MongoDB Atlas backend..." />
         ) : (
           <>
             {/* TAB 1: OVERVIEW */}
@@ -179,13 +182,13 @@ export const AdminDashboardView: React.FC = () => {
                 {/* Pending Approval Alert Banner */}
                 {stats && stats.pendingApprovals > 0 && (
                   <TouchableOpacity
-                    style={[styles.pendingBanner, { backgroundColor: colors.accentSurface, borderColor: colors.primary }]}
+                    style={[styles.pendingBanner, { backgroundColor: colors.primarySurface, borderColor: colors.primaryBorder }]}
                     onPress={() => setActiveRouteId('admin-approvals')}
                   >
-                    <Text style={styles.bannerIcon}>⚠️</Text>
+                    <Icon name="alert-triangle" size={20} color={colors.primary} />
                     <View style={styles.bannerTextCol}>
                       <Text style={[styles.bannerTitle, { color: colors.primary }]}>
-                        {stats.pendingApprovals} Pending Approval Requests Require Review
+                        {stats.pendingApprovals} Pending Approval Requests Await Review
                       </Text>
                       <Text style={[styles.bannerSubtitle, { color: colors.textSecondary }]}>
                         {stats.breakdown.pendingGarages} Garages • {stats.breakdown.pendingUsers} Drivers/Users • {stats.breakdown.pendingVehicles} Vehicles
@@ -199,7 +202,10 @@ export const AdminDashboardView: React.FC = () => {
                 <View style={styles.statsGrid}>
                   <Card variant="hero" style={styles.statCard}>
                     <CardBody style={styles.statCardBody}>
-                      <Text style={[styles.statValue, { color: colors.primary }]}>{stats?.totalUsers ?? 0}</Text>
+                      <View style={styles.statCardHeader}>
+                        <Icon name="users" size={20} color={colors.primary} />
+                        <Text style={[styles.statValue, { color: colors.primary }]}>{stats?.totalUsers ?? 0}</Text>
+                      </View>
                       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Registered Users</Text>
                       <Text style={[styles.statDetail, { color: colors.textMuted }]}>
                         {stats?.passengers ?? 0} Passengers • {stats?.drivers ?? 0} Drivers
@@ -209,8 +215,11 @@ export const AdminDashboardView: React.FC = () => {
 
                   <Card variant="elevated" style={styles.statCard}>
                     <CardBody style={styles.statCardBody}>
-                      <Text style={[styles.statValue, { color: colors.success }]}>{stats?.drivers ?? 0}</Text>
-                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Total Drivers</Text>
+                      <View style={styles.statCardHeader}>
+                        <Icon name="navigation" size={20} color={colors.primary} />
+                        <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats?.drivers ?? 0}</Text>
+                      </View>
+                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Registered Drivers</Text>
                       <Text style={[styles.statDetail, { color: colors.textMuted }]}>
                         {stats?.garageRegisteredDrivers ?? 0} Garage-Registered • {stats?.selfOwnedDrivers ?? 0} Self-Owned
                       </Text>
@@ -219,7 +228,10 @@ export const AdminDashboardView: React.FC = () => {
 
                   <Card variant="elevated" style={styles.statCard}>
                     <CardBody style={styles.statCardBody}>
-                      <Text style={[styles.statValue, { color: colors.primary }]}>{stats?.garages ?? 0}</Text>
+                      <View style={styles.statCardHeader}>
+                        <Icon name="briefcase" size={20} color={colors.primary} />
+                        <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stats?.garages ?? 0}</Text>
+                      </View>
                       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Registered Garages</Text>
                       <Text style={[styles.statDetail, { color: colors.textMuted }]}>
                         {stats?.breakdown.pendingGarages ?? 0} Pending Verification
@@ -229,7 +241,10 @@ export const AdminDashboardView: React.FC = () => {
 
                   <Card variant="elevated" style={styles.statCard}>
                     <CardBody style={styles.statCardBody}>
-                      <Text style={[styles.statValue, { color: colors.accent }]}>{stats?.vehicles ?? 0}</Text>
+                      <View style={styles.statCardHeader}>
+                        <Icon name="truck" size={20} color={colors.primary} />
+                        <Text style={[styles.statValue, { color: colors.accent }]}>{stats?.vehicles ?? 0}</Text>
+                      </View>
                       <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Rickshaws / Fleet</Text>
                       <Text style={[styles.statDetail, { color: colors.textMuted }]}>
                         Short vehicle number unique IDs
@@ -238,32 +253,22 @@ export const AdminDashboardView: React.FC = () => {
                   </Card>
                 </View>
 
-                {/* Secondary Operational Stats Row */}
-                <View style={styles.statsGrid}>
-                  <View style={[styles.miniStatBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Text style={[styles.miniStatNumber, { color: colors.warning }]}>{stats?.pendingApprovals ?? 0}</Text>
-                    <Text style={[styles.miniStatLabel, { color: colors.textSecondary }]}>Pending Approvals</Text>
-                  </View>
+                {/* GeoTelemetry Map Preview Container */}
+                <MapContainer
+                  height={340}
+                  title="Dhaka GeoTelemetry Command Center"
+                  subtitle="Live Device GPS & Fleet Position Telemetry"
+                />
 
-                  <View style={[styles.miniStatBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Text style={[styles.miniStatNumber, { color: colors.success }]}>{stats?.activeEntities ?? 0}</Text>
-                    <Text style={[styles.miniStatLabel, { color: colors.textSecondary }]}>Active Operational Entities</Text>
-                  </View>
-
-                  <View style={[styles.miniStatBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                    <Text style={[styles.miniStatNumber, { color: colors.danger }]}>{stats?.suspendedEntities ?? 0}</Text>
-                    <Text style={[styles.miniStatLabel, { color: colors.textSecondary }]}>Suspended Entities</Text>
-                  </View>
-                </View>
-
-                {/* Recent Audit Log Stream Preview */}
+                {/* Recent Audit Stream Card */}
                 <Card variant="default" style={styles.fullWidthCard}>
                   <CardHeader
-                    title="Recent Admin Audit Activity"
-                    subtitle="Immutable system log stream"
+                    title="Recent Admin Audit Log Stream"
+                    subtitle="Immutable records of administrative operational actions"
+                    icon={<Icon name="shield" size={18} color={colors.primary} />}
                     action={
                       <Button
-                        title="View Full Audit Log"
+                        title="Full Audit Log"
                         size="sm"
                         variant="outline"
                         onPress={() => setActiveRouteId('admin-audit')}
@@ -274,13 +279,13 @@ export const AdminDashboardView: React.FC = () => {
                     {auditLogs.length === 0 ? (
                       <EmptyState
                         title="No Recent Audit Logs"
-                        description="Admin operational actions will be recorded here automatically."
+                        description="Administrative review actions will be logged here automatically."
                       />
                     ) : (
                       auditLogs.slice(0, 5).map((log) => (
                         <View key={log._id} style={[styles.logRow, { borderBottomColor: colors.borderSubtle }]}>
                           <View style={styles.logMeta}>
-                            <Text style={[styles.logAction, { color: colors.primary }]}>{log.action}</Text>
+                            <Badge label={log.action} variant="info" />
                             <Text style={[styles.logTime, { color: colors.textMuted }]}>
                               {new Date(log.timestamp).toLocaleString()}
                             </Text>
@@ -299,7 +304,6 @@ export const AdminDashboardView: React.FC = () => {
             {/* TAB 2: APPROVAL QUEUE */}
             {currentNavItem.id === 'admin-approvals' && (
               <View style={styles.viewSection}>
-                {/* Filter Tabs */}
                 <View style={styles.filterRow}>
                   {(['ALL', 'GARAGE', 'USER', 'VEHICLE'] as const).map((filter) => (
                     <TouchableOpacity
@@ -353,12 +357,12 @@ export const AdminDashboardView: React.FC = () => {
                             </Text>
                           </View>
 
-                          {/* Action Buttons */}
                           <View style={styles.actionRow}>
                             <Button
                               title="Approve Entity"
                               variant="primary"
                               size="sm"
+                              icon={<Icon name="check" size={14} color={colors.primaryForeground} />}
                               loading={actionLoadingId === item.id}
                               onPress={() => handleApprovalAction(item.entityType, item.id, 'APPROVE')}
                             />
@@ -366,6 +370,7 @@ export const AdminDashboardView: React.FC = () => {
                               title="Reject"
                               variant="outline"
                               size="sm"
+                              icon={<Icon name="x" size={14} color={colors.textPrimary} />}
                               disabled={actionLoadingId === item.id}
                               onPress={() => handleApprovalAction(item.entityType, item.id, 'REJECT')}
                             />
@@ -612,14 +617,20 @@ export const AdminDashboardView: React.FC = () => {
               </View>
             )}
 
-            {/* TAB 7: SAFETY / SOS PLACEHOLDER */}
+            {/* TAB 7: SAFETY / SOS COMMAND CENTER */}
             {currentNavItem.id === 'admin-safety' && (
               <View style={styles.viewSection}>
+                <MapContainer
+                  height={360}
+                  title="Real-Time Emergency & Safety Dispatch Map"
+                  subtitle="Device GPS Tracking & Rapid Response Escalation"
+                />
+
                 <Card variant="hero" style={styles.fullWidthCard}>
                   <CardHeader
                     title="Safety & Real-Time SOS Command Monitor"
                     subtitle="Live platform trip monitoring & safety alert center"
-                    action={<Badge label="Hardware Independent" variant="neutral" />}
+                    icon={<Icon name="alert-triangle" size={18} color={colors.primary} />}
                   />
                   <CardBody style={styles.placeholderBody}>
                     <View style={styles.placeholderGrid}>
@@ -648,7 +659,11 @@ export const AdminDashboardView: React.FC = () => {
             {currentNavItem.id === 'admin-audit' && (
               <View style={styles.viewSection}>
                 <Card variant="default" style={styles.fullWidthCard}>
-                  <CardHeader title="System Audit Stream" subtitle="Complete record of Admin actions" />
+                  <CardHeader
+                    title="System Audit Stream"
+                    subtitle="Complete record of Admin operational actions"
+                    icon={<Icon name="shield" size={18} color={colors.primary} />}
+                  />
                   <CardBody>
                     {auditLogs.length === 0 ? (
                       <EmptyState title="No Audit Records" description="No administrative actions have been logged yet." />
@@ -672,11 +687,15 @@ export const AdminDashboardView: React.FC = () => {
               </View>
             )}
 
-            {/* TAB 9: PLATFORM SETTINGS PLACEHOLDER */}
+            {/* TAB 9: PLATFORM SETTINGS */}
             {currentNavItem.id === 'admin-settings' && (
               <View style={styles.viewSection}>
                 <Card variant="default" style={styles.fullWidthCard}>
-                  <CardHeader title="Platform Operating Parameters" subtitle="System-wide configuration" />
+                  <CardHeader
+                    title="Platform Operating Parameters"
+                    subtitle="System-wide configuration"
+                    icon={<Icon name="settings" size={18} color={colors.primary} />}
+                  />
                   <CardBody>
                     <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
                       Global platform parameters, maintenance mode toggles, and base fare configuration will be managed here.
@@ -710,7 +729,7 @@ const styles = StyleSheet.create({
   commandHeaderTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.xs + 2,
   },
   headerAccentDot: {
     width: 8,
@@ -720,7 +739,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: '800',
-    letterSpacing: 0.2,
+    letterSpacing: -0.2,
   },
   headerSubtitle: {
     fontSize: 13,
@@ -736,9 +755,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-  },
-  bannerIcon: {
-    fontSize: 20,
   },
   bannerTextCol: {
     flex: 1,
@@ -767,9 +783,15 @@ const styles = StyleSheet.create({
   statCardBody: {
     gap: spacing.xs,
   },
+  statCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   statValue: {
     fontSize: 32,
     fontWeight: '900',
+    letterSpacing: -0.8,
   },
   statLabel: {
     fontSize: 14,
@@ -777,23 +799,6 @@ const styles = StyleSheet.create({
   },
   statDetail: {
     fontSize: 12,
-  },
-  miniStatBox: {
-    flex: 1,
-    minWidth: 160,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  miniStatNumber: {
-    fontSize: 22,
-    fontWeight: '800',
-  },
-  miniStatLabel: {
-    fontSize: 12,
-    marginTop: 2,
-    fontWeight: '500',
   },
   fullWidthCard: {
     width: '100%',
@@ -807,10 +812,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  logAction: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   logTime: {
     fontSize: 11,

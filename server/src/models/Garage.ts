@@ -1,6 +1,6 @@
 import { Schema, model, Document, Types } from 'mongoose';
 
-export type VerificationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type VerificationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
 
 export interface IGarage extends Document {
   ownerId: Types.ObjectId;
@@ -22,7 +22,7 @@ const GarageSchema = new Schema<IGarage>(
     phone: { type: String, required: true, trim: true },
     verificationStatus: {
       type: String,
-      enum: ['PENDING', 'APPROVED', 'REJECTED'],
+      enum: ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'],
       default: 'PENDING',
       index: true,
     },
@@ -35,3 +35,4 @@ const GarageSchema = new Schema<IGarage>(
 );
 
 export const Garage = model<IGarage>('Garage', GarageSchema);
+

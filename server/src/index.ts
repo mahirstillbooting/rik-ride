@@ -6,6 +6,7 @@ import { connectDatabase } from './config/db';
 import { socketManager } from './sockets/socketManager';
 import { qrService } from './services/qrService';
 import authRoutes from './routes/authRoutes';
+import adminRoutes from './routes/adminRoutes';
 
 validateEnv();
 
@@ -17,6 +18,7 @@ app.use(express.json());
 
 // Register API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health & Verification Endpoint
 app.get('/api/health', (_req, res) => {

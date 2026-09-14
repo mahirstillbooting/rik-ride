@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { useRouter } from '../navigation/RouterContext';
+import { useAuth } from '../context/AuthContext';
 import { Card, CardHeader, CardBody, CardFooter } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -13,16 +14,23 @@ import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
 import { spacing, borderRadius } from '../theme/spacing';
+import { AdminDashboardView } from './AdminDashboardView';
 
 export const RoleViewContainer: React.FC = () => {
   const { colors } = useTheme();
   const { currentRoleConfig, currentNavItem } = useRouter();
+  const { user } = useAuth();
   const { showToast } = useToast();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [selectVal, setSelectVal] = useState('active');
   const [inputText, setInputText] = useState('');
   const [sampleState, setSampleState] = useState<'content' | 'loading' | 'empty' | 'error'>('content');
+
+  // Render Admin Dashboard View when active role is ADMIN
+  if (currentRoleConfig.role === 'ADMIN' || user?.role === 'ADMIN') {
+    return <AdminDashboardView />;
+  }
 
   return (
     <View style={styles.container}>
@@ -91,7 +99,7 @@ export const RoleViewContainer: React.FC = () => {
 
       {sampleState === 'content' && (
         <View style={styles.stackContainer}>
-          {/* Hero Feature Card showcasing dark theme orange glow & layered depth */}
+          {/* Hero Feature Card */}
           <Card variant="hero" style={styles.heroCard}>
             <CardHeader
               title={`${currentRoleConfig.displayName} Command Center`}
@@ -130,7 +138,6 @@ export const RoleViewContainer: React.FC = () => {
 
           {/* Grid of Secondary & Interactive Cards */}
           <View style={styles.grid}>
-            {/* Card 2: Elevated Surface Card */}
             <Card variant="elevated" style={styles.card}>
               <CardHeader
                 title="Layered Visual Hierarchy"
@@ -157,7 +164,6 @@ export const RoleViewContainer: React.FC = () => {
               </CardFooter>
             </Card>
 
-            {/* Card 3: Interactive UI Controls */}
             <Card variant="default" style={styles.card}>
               <CardHeader
                 title="Design System Controls"

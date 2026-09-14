@@ -2,7 +2,7 @@ import { Schema, model, Document, Types } from 'mongoose';
 
 export type DriverOwnershipMode = 'GARAGE_REGISTERED' | 'SELF_OWNED';
 export type VehicleStatus = 'AVAILABLE' | 'ON_RIDE' | 'OFFLINE';
-export type VehicleVerificationStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type VehicleVerificationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
 
 export interface IGeoPoint {
   type: 'Point';
@@ -10,6 +10,7 @@ export interface IGeoPoint {
 }
 
 export interface IVehicle extends Document {
+  shortVehicleNumber: string; // Unique human-readable short car number (e.g. D-1024)
   registrationNumber: string;
   qrIdentifier: string; // Cryptographically signed token (HMAC), not raw _id
   ownershipType: DriverOwnershipMode;
@@ -26,6 +27,14 @@ export interface IVehicle extends Document {
 
 const VehicleSchema = new Schema<IVehicle>(
   {
+    shortVehicleNumber: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+      uppercase: true,
+      trim: true,
+    },
     registrationNumber: { type: String, required: true, unique: true, index: true, uppercase: true, trim: true },
     qrIdentifier: { type: String, required: true, unique: true, index: true },
     ownershipType: {
@@ -38,7 +47,7 @@ const VehicleSchema = new Schema<IVehicle>(
     assignedDriverId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     verificationStatus: {
       type: String,
-      enum: ['PENDING', 'APPROVED', 'REJECTED'],
+      enum: ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'],
       default: 'PENDING',
       index: true,
     },
@@ -71,3 +80,4 @@ const VehicleSchema = new Schema<IVehicle>(
 VehicleSchema.index({ location: '2dsphere' });
 
 export const Vehicle = model<IVehicle>('Vehicle', VehicleSchema);
+

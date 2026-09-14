@@ -10,7 +10,7 @@ export const Sidebar: React.FC = () => {
 
   return (
     <View style={[styles.sidebar, { backgroundColor: colors.surface, borderRightColor: colors.border }]}>
-      <View style={styles.roleHeader}>
+      <View style={[styles.roleHeader, { borderBottomColor: colors.borderSubtle }]}>
         <Text style={[styles.roleTitle, { color: colors.textPrimary }]}>
           {currentRoleConfig.displayName}
         </Text>
@@ -31,11 +31,13 @@ export const Sidebar: React.FC = () => {
                 styles.navItem,
                 {
                   backgroundColor: isActive ? colors.accentSurface : 'transparent',
+                  borderColor: isActive ? colors.accent : 'transparent',
+                  borderWidth: isActive ? 1 : 0,
                 },
               ]}
             >
               <View style={styles.navItemContent}>
-                <Text style={{ color: isActive ? colors.accent : colors.textMuted, fontSize: 14 }}>
+                <Text style={{ color: isActive ? colors.accent : colors.textMuted, fontSize: 10 }}>
                   ●
                 </Text>
                 <Text
@@ -78,7 +80,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     paddingBottom: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
   },
   roleTitle: {
     fontSize: 15,
@@ -106,7 +107,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   navLabel: {
-    fontSize: 14,
+    fontSize: 13,
   },
   badge: {
     paddingHorizontal: spacing.xs,

@@ -78,7 +78,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
           onPress={toggleTheme}
           style={[styles.themeToggle, { backgroundColor: colors.surfaceHover, borderColor: colors.border }]}
         >
-          <Text style={{ color: colors.textPrimary, fontSize: 14 }}>
+          <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
             {mode === 'dark' ? '☀️ Light' : '🌙 Dark'}
           </Text>
         </TouchableOpacity>
@@ -110,11 +110,13 @@ const styles = StyleSheet.create({
   brandText: {
     fontSize: 20,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
   brandTag: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   rightSection: {
     flexDirection: 'row',

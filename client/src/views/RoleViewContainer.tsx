@@ -12,7 +12,7 @@ import { useToast } from '../components/ui/Toast';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
-import { spacing } from '../theme/spacing';
+import { spacing, borderRadius } from '../theme/spacing';
 
 export const RoleViewContainer: React.FC = () => {
   const { colors } = useTheme();
@@ -26,9 +26,9 @@ export const RoleViewContainer: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Route Header Banner */}
+      {/* Top Banner & State Controller */}
       <View style={[styles.headerBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View>
+        <View style={styles.bannerInfo}>
           <View style={styles.titleRow}>
             <Text style={[styles.routeTitle, { color: colors.textPrimary }]}>
               {currentNavItem.label}
@@ -36,11 +36,11 @@ export const RoleViewContainer: React.FC = () => {
             <Badge label={currentRoleConfig.displayName} variant="info" />
           </View>
           <Text style={[styles.routeSubtitle, { color: colors.textSecondary }]}>
-            Role View Placeholder for route [{currentNavItem.id}]
+            Role Architecture Route [{currentNavItem.id}]
           </Text>
         </View>
 
-        {/* View State Switcher for Verification */}
+        {/* View State Controller */}
         <View style={styles.stateButtons}>
           <Button
             title="Content"
@@ -90,69 +90,109 @@ export const RoleViewContainer: React.FC = () => {
       )}
 
       {sampleState === 'content' && (
-        <View style={styles.grid}>
-          {/* Card 1: Role Information */}
-          <Card style={styles.card}>
+        <View style={styles.stackContainer}>
+          {/* Hero Feature Card showcasing dark theme orange glow & layered depth */}
+          <Card variant="hero" style={styles.heroCard}>
             <CardHeader
-              title={`${currentRoleConfig.displayName} Architecture`}
-              subtitle={`Mode: ${currentRoleConfig.role}`}
-              action={<Badge label="Verified" variant="success" />}
+              title={`${currentRoleConfig.displayName} Command Center`}
+              subtitle={`Operating Mode: ${currentRoleConfig.role}`}
+              action={<Badge label="Refined Theme" variant="info" />}
             />
-            <CardBody>
-              <Text style={[styles.cardText, { color: colors.textSecondary }]}>
+            <CardBody style={styles.heroBody}>
+              <View style={styles.heroStatsRow}>
+                <View style={[styles.statBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderSubtle }]}>
+                  <Text style={[styles.statNumber, { color: colors.primary }]}>24</Text>
+                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>Active Units</Text>
+                </View>
+                <View style={[styles.statBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderSubtle }]}>
+                  <Text style={[styles.statNumber, { color: colors.success }]}>98.4%</Text>
+                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>Platform Uptime</Text>
+                </View>
+                <View style={[styles.statBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderSubtle }]}>
+                  <Text style={[styles.statNumber, { color: colors.accent }]}>Live</Text>
+                  <Text style={[styles.statLabel, { color: colors.textMuted }]}>GeoTelemetry</Text>
+                </View>
+              </View>
+
+              <Text style={[styles.heroDescription, { color: colors.textSecondary }]}>
                 {currentRoleConfig.description}
               </Text>
-              <View style={styles.badgeRow}>
-                <Badge label="Role-Based" variant="info" />
-                <Badge label="Responsive Shell" variant="neutral" />
-                <Badge label="Dark/Light Ready" variant="success" />
-              </View>
             </CardBody>
             <CardFooter>
               <Button
-                title="Test Toast Notification"
-                size="sm"
-                variant="outline"
-                onPress={() => showToast(`Active Role: ${currentRoleConfig.displayName}`, 'success')}
-              />
-            </CardFooter>
-          </Card>
-
-          {/* Card 2: Interactive Design System Controls */}
-          <Card style={styles.card}>
-            <CardHeader
-              title="Design System Foundation"
-              subtitle="Interactive UI inputs & modal dialog test"
-            />
-            <CardBody>
-              <Input
-                label="Sample Foundation Input"
-                placeholder="Type something here..."
-                value={inputText}
-                onChangeText={setInputText}
-                helperText="Reusable text input with focus & error styling"
-              />
-
-              <Select
-                label="Status Filter Select"
-                value={selectVal}
-                onChange={setSelectVal}
-                options={[
-                  { label: 'Active Status', value: 'active' },
-                  { label: 'Pending Approval', value: 'pending' },
-                  { label: 'Completed Shift', value: 'completed' },
-                ]}
-              />
-            </CardBody>
-            <CardFooter>
-              <Button
-                title="Open Modal Dialog"
+                title="Trigger Notification Toast"
                 size="sm"
                 variant="primary"
-                onPress={() => setModalVisible(true)}
+                onPress={() => showToast(`Active Role: ${currentRoleConfig.displayName}`, 'info')}
               />
             </CardFooter>
           </Card>
+
+          {/* Grid of Secondary & Interactive Cards */}
+          <View style={styles.grid}>
+            {/* Card 2: Elevated Surface Card */}
+            <Card variant="elevated" style={styles.card}>
+              <CardHeader
+                title="Layered Visual Hierarchy"
+                subtitle="Surface Level 2 (Elevated Card)"
+                action={<Badge label="Level 2" variant="neutral" />}
+              />
+              <CardBody>
+                <Text style={[styles.cardText, { color: colors.textSecondary }]}>
+                  Demonstrating surface stacking depth between background (#090C10), primary surface (#111620), and elevated surface (#19202E).
+                </Text>
+                <View style={styles.badgeRow}>
+                  <Badge label="Near-Black" variant="neutral" />
+                  <Badge label="Charcoal" variant="neutral" />
+                  <Badge label="Orange Accent" variant="info" />
+                </View>
+              </CardBody>
+              <CardFooter>
+                <Button
+                  title="Secondary Action"
+                  size="sm"
+                  variant="outline"
+                  onPress={() => showToast('Secondary action invoked', 'info')}
+                />
+              </CardFooter>
+            </Card>
+
+            {/* Card 3: Interactive UI Controls */}
+            <Card variant="default" style={styles.card}>
+              <CardHeader
+                title="Design System Controls"
+                subtitle="Form elements and modal triggers"
+              />
+              <CardBody>
+                <Input
+                  label="Sample Input"
+                  placeholder="Type something here..."
+                  value={inputText}
+                  onChangeText={setInputText}
+                  helperText="Focus and hover states respond with warm orange indicators"
+                />
+
+                <Select
+                  label="Filter Status"
+                  value={selectVal}
+                  onChange={setSelectVal}
+                  options={[
+                    { label: 'Active Status', value: 'active' },
+                    { label: 'Pending Approval', value: 'pending' },
+                    { label: 'Completed Shift', value: 'completed' },
+                  ]}
+                />
+              </CardBody>
+              <CardFooter>
+                <Button
+                  title="Open Modal Dialog"
+                  size="sm"
+                  variant="primary"
+                  onPress={() => setModalVisible(true)}
+                />
+              </CardFooter>
+            </Card>
+          </View>
         </View>
       )}
 
@@ -160,7 +200,7 @@ export const RoleViewContainer: React.FC = () => {
       <Modal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        title="Responsive Modal Dialog Foundation"
+        title="Refined Modal Dialog"
         footer={
           <>
             <Button
@@ -182,7 +222,7 @@ export const RoleViewContainer: React.FC = () => {
         }
       >
         <Text style={[styles.modalBodyText, { color: colors.textPrimary }]}>
-          This modal foundation supports backdrop dismiss, header title, body content, and action footers cleanly across Web and Mobile viewports.
+          This modal dialog presents crisp dark charcoal surfaces, clean borders, and responsive actions across Web and Mobile viewports.
         </Text>
       </Modal>
     </View>
@@ -196,13 +236,17 @@ const styles = StyleSheet.create({
   },
   headerBanner: {
     padding: spacing.md,
-    borderRadius: spacing.sm,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: spacing.md,
+  },
+  bannerInfo: {
+    flex: 1,
+    minWidth: 240,
   },
   titleRow: {
     flexDirection: 'row',
@@ -212,6 +256,7 @@ const styles = StyleSheet.create({
   routeTitle: {
     fontSize: 22,
     fontWeight: '800',
+    letterSpacing: 0.3,
   },
   routeSubtitle: {
     fontSize: 13,
@@ -221,6 +266,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
     flexWrap: 'wrap',
+  },
+  stackContainer: {
+    gap: spacing.md,
+  },
+  heroCard: {
+    width: '100%',
+  },
+  heroBody: {
+    gap: spacing.md,
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  statBox: {
+    flex: 1,
+    minWidth: 120,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  statLabel: {
+    fontSize: 11,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  heroDescription: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   grid: {
     flexDirection: 'row',

@@ -132,5 +132,6 @@ const styles = StyleSheet.create({
   },
   text: {
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
 });

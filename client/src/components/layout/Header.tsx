@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { useRouter } from '../../navigation/RouterContext';
+import { useAuth } from '../../context/AuthContext';
 import { useBreakpoint } from '../../theme/breakpoints';
 import { borderRadius, spacing } from '../../theme/spacing';
 import { UserRole } from '../../navigation/roleConfig';
@@ -13,6 +14,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
   const { mode, colors, toggleTheme } = useTheme();
   const { activeRole, setActiveRole } = useRouter();
+  const { authState, user, logout } = useAuth();
   const { isMobile } = useBreakpoint();
 
   const roleOptions: { label: string; value: UserRole }[] = [
@@ -37,7 +39,9 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
 
         <View style={styles.brandContainer}>
           <Text style={[styles.brandText, { color: colors.primary }]}>RIK-RIDE</Text>
-          <Text style={[styles.brandTag, { color: colors.textMuted }]}>Platform Shell</Text>
+          <Text style={[styles.brandTag, { color: colors.textMuted }]}>
+            {authState === 'authenticated' && user ? `${user.role}` : 'Auth Foundation'}
+          </Text>
         </View>
       </View>
 
@@ -70,6 +74,24 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
                 </TouchableOpacity>
               );
             })}
+          </View>
+        )}
+
+        {/* Auth User Pill & Logout Button */}
+        {authState === 'authenticated' && user && (
+          <View style={styles.userSection}>
+            {!isMobile && (
+              <View style={styles.userInfo}>
+                <Text style={[styles.userName, { color: colors.textPrimary }]}>{user.name}</Text>
+                <Text style={[styles.userRole, { color: colors.primary }]}>{user.phone}</Text>
+              </View>
+            )}
+            <TouchableOpacity
+              onPress={logout}
+              style={[styles.logoutBtn, { backgroundColor: colors.surfaceHover, borderColor: colors.border }]}
+            >
+              <Text style={[styles.logoutText, { color: colors.danger }]}>Sign Out</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -143,6 +165,32 @@ const styles = StyleSheet.create({
   },
   roleChipText: {
     fontSize: 12,
+  },
+  userSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  userInfo: {
+    alignItems: 'flex-end',
+  },
+  userName: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  userRole: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  logoutBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  logoutText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   themeToggle: {
     paddingHorizontal: spacing.sm,

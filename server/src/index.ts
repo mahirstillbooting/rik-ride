@@ -5,6 +5,7 @@ import { env, validateEnv } from './config/env';
 import { connectDatabase } from './config/db';
 import { socketManager } from './sockets/socketManager';
 import { qrService } from './services/qrService';
+import authRoutes from './routes/authRoutes';
 
 validateEnv();
 
@@ -13,6 +14,9 @@ const PORT = env.port;
 
 app.use(cors());
 app.use(express.json());
+
+// Register API Routes
+app.use('/api/auth', authRoutes);
 
 // Health & Verification Endpoint
 app.get('/api/health', (_req, res) => {

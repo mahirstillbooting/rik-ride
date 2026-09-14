@@ -7,6 +7,7 @@ import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import { PageContainer } from './PageContainer';
 import { RoleViewContainer } from '../../views/RoleViewContainer';
+import { ProtectedGuard } from '../../navigation/ProtectedGuard';
 import { ToastProvider } from '../ui/Toast';
 
 export const AppShellContent: React.FC = () => {
@@ -21,13 +22,16 @@ export const AppShellContent: React.FC = () => {
 
       {/* Main Body Layout */}
       <View style={styles.body}>
-        {/* Sidebar on Tablet & Desktop */}
-        {!isMobile && <Sidebar />}
+        {/* Protected Guard Wraps Role Navigation & Page Content */}
+        <ProtectedGuard>
+          {/* Sidebar on Tablet & Desktop */}
+          {!isMobile && <Sidebar />}
 
-        {/* Page Content Container */}
-        <PageContainer>
-          <RoleViewContainer />
-        </PageContainer>
+          {/* Page Content Container */}
+          <PageContainer>
+            <RoleViewContainer />
+          </PageContainer>
+        </ProtectedGuard>
       </View>
 
       {/* Mobile Navigation & Drawer Overlay */}

@@ -15,6 +15,8 @@ export type UserRole =
   | 'INDEPENDENT_DRIVER'
   | 'PASSENGER';
 
+export type DriverOperatingMode = 'GARAGE_REGISTERED' | 'SELF_OWNED';
+
 export interface NavItem {
   id: string;
   label: string;

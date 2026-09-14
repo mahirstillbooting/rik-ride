@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { borderRadius, spacing, shadows } from '../../theme/spacing';
 
@@ -8,7 +8,7 @@ export type CardVariant = 'default' | 'elevated' | 'hero' | 'highlight';
 export interface CardProps {
   children: ReactNode;
   variant?: CardVariant;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export const Card: React.FC<CardProps> = ({ children, variant = 'default', style }) => {
@@ -66,7 +66,7 @@ export interface CardHeaderProps {
   title: string;
   subtitle?: string;
   action?: ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export const CardHeader: React.FC<CardHeaderProps> = ({ title, subtitle, action, style }) => {
@@ -85,12 +85,12 @@ export const CardHeader: React.FC<CardHeaderProps> = ({ title, subtitle, action,
   );
 };
 
-export const CardBody: React.FC<{ children: ReactNode; style?: ViewStyle }> = ({
+export const CardBody: React.FC<{ children: ReactNode; style?: StyleProp<ViewStyle> }> = ({
   children,
   style,
 }) => <View style={[styles.body, style]}>{children}</View>;
 
-export const CardFooter: React.FC<{ children: ReactNode; style?: ViewStyle }> = ({
+export const CardFooter: React.FC<{ children: ReactNode; style?: StyleProp<ViewStyle> }> = ({
   children,
   style,
 }) => {

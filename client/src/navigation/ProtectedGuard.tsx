@@ -19,12 +19,18 @@ export const ProtectedGuard: React.FC<ProtectedGuardProps> = ({ children }) => {
   const { activeRole, setActiveRole } = useRouter();
   const { colors } = useTheme();
 
-  // Auto-synchronize router activeRole to authenticated user's assigned role
+  // Auto-synchronize router activeRole to authenticated user's assigned role & driverMode
   React.useEffect(() => {
-    if (user?.role && user.role !== activeRole) {
-      setActiveRole(user.role);
+    if (user?.role) {
+      let targetRole: any = user.role;
+      if (user.role === 'DRIVER') {
+        targetRole = user.driverMode === 'SELF_OWNED' ? 'INDEPENDENT_DRIVER' : 'GARAGE_DRIVER';
+      }
+      if (targetRole !== activeRole) {
+        setActiveRole(targetRole);
+      }
     }
-  }, [user?.role]);
+  }, [user?.role, user?.driverMode]);
 
   if (authState === 'loading') {
     return <LoadingState message="Restoring RIK-RIDE session..." />;
@@ -81,7 +87,11 @@ export const ProtectedGuard: React.FC<ProtectedGuardProps> = ({ children }) => {
 
   // Role Authorization Guard Check
   // Verify if active preview role matches the authenticated user's role
-  if (user.role !== activeRole) {
+  const isRoleMatching =
+    user.role === activeRole ||
+    (user.role === 'DRIVER' && (activeRole === 'GARAGE_DRIVER' || activeRole === 'INDEPENDENT_DRIVER'));
+
+  if (!isRoleMatching) {
     return (
       <View style={styles.noticeContainer}>
         <Card variant="hero" style={styles.noticeCard}>

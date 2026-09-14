@@ -8,6 +8,7 @@ import { qrService } from './services/qrService';
 import authRoutes from './routes/authRoutes';
 import adminRoutes from './routes/adminRoutes';
 import garageRoutes from './routes/garageRoutes';
+import driverRoutes from './routes/driverRoutes';
 
 validateEnv();
 
@@ -21,6 +22,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/garage', garageRoutes);
+app.use('/api/driver', driverRoutes);
 
 // Health & Verification Endpoint
 app.get('/api/health', (_req, res) => {

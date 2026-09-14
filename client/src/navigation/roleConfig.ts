@@ -13,7 +13,8 @@ export type UserRole =
   | 'GARAGE_OWNER'
   | 'GARAGE_DRIVER'
   | 'INDEPENDENT_DRIVER'
-  | 'PASSENGER';
+  | 'PASSENGER'
+  | 'DRIVER';
 
 export type DriverOperatingMode = 'GARAGE_REGISTERED' | 'SELF_OWNED';
 
@@ -91,6 +92,17 @@ export const ROLE_CONFIGS: Record<UserRole, RoleNavigationConfig> = {
       { id: 'passenger-activity', label: 'My Trips', iconName: 'clock' },
       { id: 'passenger-saved', label: 'Saved Places', iconName: 'heart' },
       { id: 'passenger-profile', label: 'Account & Settings', iconName: 'user' },
+    ],
+  },
+  DRIVER: {
+    role: 'DRIVER',
+    displayName: 'Driver',
+    description: 'Operates vehicle on RIK-RIDE platform',
+    navItems: [
+      { id: 'gdriver-shift', label: 'Shift Control', iconName: 'key' },
+      { id: 'gdriver-vehicle', label: 'Assigned Vehicle Info', iconName: 'info' },
+      { id: 'gdriver-rides', label: 'Assigned Trips', iconName: 'map-pin' },
+      { id: 'gdriver-support', label: 'Garage Dispatch Help', iconName: 'help-circle' },
     ],
   },
 };

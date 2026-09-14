@@ -223,6 +223,35 @@ router.post('/seed-dev', async (req: Request, res: Response): Promise<void> => {
       }
     }
 
+    // Seed test Self-Owned Vehicle for Karim (01700000004)
+    const karimUser = userMap['01700000004'];
+    if (karimUser) {
+      const { Vehicle } = await import('../models/Vehicle');
+      const { VehicleDriver } = await import('../models/VehicleDriver');
+      const { qrService } = await import('../services/qrService');
+
+      const selfVeh = await Vehicle.findOneAndUpdate(
+        { shortVehicleNumber: 'SV-2041' },
+        {
+          registrationNumber: 'DHK-HA-2041',
+          qrIdentifier: qrService.generateSignedToken('SV-2041'),
+          ownershipType: 'SELF_OWNED',
+          assignedDriverId: karimUser._id,
+          verificationStatus: 'APPROVED',
+          status: 'OFFLINE',
+          modelName: 'Private Solar Rickshaw Pro',
+          manufacturingYear: 2024,
+        },
+        { upsert: true, new: true }
+      );
+
+      await VehicleDriver.findOneAndUpdate(
+        { vehicleId: selfVeh._id, driverId: karimUser._id, isCurrent: true },
+        { assignedAt: new Date(), isCurrent: true },
+        { upsert: true, new: true }
+      );
+    }
+
     res.json({
       success: true,
       message: 'Development test accounts, garage, vehicles, and drivers seeded successfully!',

@@ -257,6 +257,10 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
           setIsUserPanning(true);
         });
 
+        map.on('click', () => {
+          handleOpenModal();
+        });
+
         mapInstanceRef.current = map;
         markerRef.current = marker;
         tileLayerRef.current = tileLayer;

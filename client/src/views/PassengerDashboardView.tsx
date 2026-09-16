@@ -352,8 +352,8 @@ export const PassengerDashboardView: React.FC = () => {
           {/* Real Interactive Map Canvas */}
           <View style={{ marginTop: spacing.sm }}>
             <RealMapContainer
-              latitude={currentLoc?.latitude ?? 23.8103}
-              longitude={currentLoc?.longitude ?? 90.4125}
+              latitude={currentLoc?.latitude}
+              longitude={currentLoc?.longitude}
               accuracy={currentLoc?.accuracy}
               status={sharingStatus}
               title="Passenger Device GPS Location Map"
@@ -363,6 +363,7 @@ export const PassengerDashboardView: React.FC = () => {
                   : 'Location Sharing Inactive — Tap "Start Location Sharing" to enable stream'
               }
               height={360}
+              allowExpand={true}
             />
           </View>
 

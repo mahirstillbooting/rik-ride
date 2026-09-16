@@ -23,6 +23,23 @@ router.get('/status', async (req: AuthenticatedRequest, res: Response): Promise<
 });
 
 /**
+ * GET /api/passenger/location/nearby-rickshaws
+ * Discovery Radar: Fetch nearby operational available electric rickshaws for Passenger Radar
+ */
+router.get('/nearby-rickshaws', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const lat = req.query.latitude ? Number(req.query.latitude) : undefined;
+    const lng = req.query.longitude ? Number(req.query.longitude) : undefined;
+    const radiusKm = req.query.radiusKm ? Number(req.query.radiusKm) : 2;
+
+    const result = await passengerLocationService.getNearbyAvailableRickshaws(lat, lng, radiusKm);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch nearby rickshaws', details: error.message });
+  }
+});
+
+/**
  * POST /api/passenger/location/start
  * Initiate live location sharing mode for authenticated passenger.
  */

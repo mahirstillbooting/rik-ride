@@ -1,6 +1,8 @@
 import { User } from '../models/User';
 import { PassengerLocation } from '../models/PassengerLocation';
 import { DriverLocation } from '../models/DriverLocation';
+import { Rating } from '../models/Rating';
+import { Ride } from '../models/Ride';
 import { LocationUpdatePayload, locationService } from './locationService';
 
 const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes staleness threshold
@@ -183,6 +185,127 @@ export class PassengerLocationService {
       passengers,
       totalActive: drivers.length + passengers.length,
     };
+  }
+
+  /**
+   * Discovery Radar: Fetch nearby operational available rickshaws within radius
+   */
+  public async getNearbyAvailableRickshaws(
+    latitude?: number,
+    longitude?: number,
+    radiusKm: number = 2
+  ) {
+    let query: any = {
+      status: 'LOCATION_ACTIVE',
+    };
+
+    // Geospatial query if passenger coordinates provided
+    if (latitude !== undefined && longitude !== undefined && !isNaN(latitude) && !isNaN(longitude)) {
+      query.location = {
+        $near: {
+          $geometry: {
+            type: 'Point',
+            coordinates: [longitude, latitude],
+          },
+          $maxDistance: radiusKm * 1000, // convert km to meters
+        },
+      };
+    }
+
+    const locations = await DriverLocation.find(query)
+      .populate({
+        path: 'driverId',
+        select: 'name phone accountStatus role',
+      })
+      .populate({
+        path: 'vehicleId',
+        select: 'vehicleId shortVehicleNumber registrationNumber qrIdentifier verificationStatus status ownershipType modelName',
+      })
+      .lean();
+
+    // Filter strictly for active drivers and approved & available vehicles
+    const validRickshaws: any[] = [];
+
+    for (const loc of locations) {
+      const driver = loc.driverId as any;
+      const vehicle = loc.vehicleId as any;
+
+      if (!driver || driver.accountStatus !== 'ACTIVE') continue;
+      if (!vehicle || vehicle.verificationStatus !== 'APPROVED' || vehicle.status !== 'AVAILABLE') continue;
+
+      // Calculate distance if passenger location is available
+      let distanceKm: number | null = null;
+      if (latitude !== undefined && longitude !== undefined && !isNaN(latitude) && !isNaN(longitude)) {
+        distanceKm = Number(this.calculateHaversineDistance(latitude, longitude, loc.latitude, loc.longitude).toFixed(2));
+      }
+
+      // Compute aggregate driver rating from Rating model
+      const ratingStats = await Rating.aggregate([
+        { $match: { ratedId: driver._id } },
+        {
+          $group: {
+            _id: '$ratedId',
+            avgRating: { $avg: '$rating' },
+            ratingsCount: { $sum: 1 },
+          },
+        },
+      ]);
+
+      const avgRating = ratingStats.length > 0 ? Number(ratingStats[0].avgRating.toFixed(1)) : null;
+      const ratingsCount = ratingStats.length > 0 ? ratingStats[0].ratingsCount : 0;
+
+      // Count completed rides for driver
+      const completedRidesCount = await Ride.countDocuments({ driverId: driver._id, status: 'COMPLETED' });
+
+      validRickshaws.push({
+        id: loc._id.toString(),
+        driverId: driver._id.toString(),
+        driverName: driver.name,
+        driverPhone: driver.phone,
+        vehicleId: vehicle._id.toString(),
+        customVehicleId: vehicle.vehicleId || vehicle.shortVehicleNumber,
+        shortVehicleNumber: vehicle.shortVehicleNumber,
+        registrationNumber: vehicle.registrationNumber,
+        qrIdentifier: vehicle.qrIdentifier,
+        ownershipType: vehicle.ownershipType,
+        modelName: vehicle.modelName || 'Electric Rickshaw',
+        verificationStatus: vehicle.verificationStatus,
+        status: vehicle.status,
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        accuracy: loc.accuracy,
+        speed: loc.speed,
+        heading: loc.heading,
+        distanceKm,
+        avgRating,
+        ratingsCount,
+        completedRidesCount,
+        updatedAt: loc.timestamp || loc.updatedAt,
+      });
+    }
+
+    return {
+      success: true,
+      count: validRickshaws.length,
+      radiusKm,
+      passengerCoordinates:
+        latitude !== undefined && longitude !== undefined ? { latitude, longitude } : null,
+      rickshaws: validRickshaws,
+    };
+  }
+
+  private calculateHaversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth radius in km
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   }
 }
 

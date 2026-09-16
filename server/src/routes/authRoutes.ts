@@ -39,6 +39,73 @@ router.get('/me', requireAuth, (req: AuthenticatedRequest, res: Response): void 
 });
 
 /**
+ * PUT /api/auth/profile
+ * Update user profile details. Enforces immutability on protected identity fields (name & nidNumber).
+ */
+router.put('/profile', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const user = await User.findById(req.user!.id);
+    if (!user) {
+      res.status(404).json({ error: 'User profile not found.' });
+      return;
+    }
+
+    const { name, nidNumber, email, city, area, address } = req.body;
+
+    // Check if user is attempting to edit protected identity fields
+    if (name && name.trim() !== user.name) {
+      if (user.isIdentityProtected || user.accountStatus === 'ACTIVE') {
+        res.status(403).json({
+          error: 'Protected Identity Field: Name cannot be directly edited. Submit an identity change request for Admin review.',
+          protectedField: 'name',
+        });
+        return;
+      } else {
+        user.name = name.trim();
+      }
+    }
+
+    if (nidNumber && nidNumber.trim() !== (user.nidNumber || '')) {
+      if (user.nidNumber && user.nidStatus === 'VERIFIED') {
+        res.status(403).json({
+          error: 'Protected Identity Field: Verified NID number cannot be directly edited. Submit an identity change request for Admin review.',
+          protectedField: 'nidNumber',
+        });
+        return;
+      }
+
+      // Check NID uniqueness
+      const existingNid = await User.findOne({
+        nidNumber: nidNumber.trim(),
+        _id: { $ne: user._id },
+      });
+      if (existingNid) {
+        res.status(400).json({ error: `NID number [${nidNumber.trim()}] is already registered under another account.` });
+        return;
+      }
+
+      user.nidNumber = nidNumber.trim();
+      user.nidStatus = 'PENDING';
+    }
+
+    if (email !== undefined) user.email = email.trim().toLowerCase();
+    if (city !== undefined) user.city = city.trim();
+    if (area !== undefined) user.area = area.trim();
+    if (address !== undefined) user.address = address.trim();
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Profile details updated successfully.',
+      user: user.toAuthJSON(),
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to update profile details', details: error.message });
+  }
+});
+
+/**
  * POST /api/auth/seed-dev
  * Development-only endpoint to seed initial test accounts for testing.
  * Disabled in production environment.
@@ -147,7 +214,11 @@ router.post('/seed-dev', async (req: Request, res: Response): Promise<void> => {
       const testGarage = await Garage.findOneAndUpdate(
         { ownerId: garageOwnerUser._id },
         {
+          garageId: 'DH-GAR-0001',
           name: 'Dhaka Central Rickshaw Hub',
+          city: 'Dhaka',
+          cityCode: 'DH',
+          area: 'Motijheel',
           address: 'Motijheel Commercial Area, Dhaka 1000',
           phone: '01700000002',
           verificationStatus: 'APPROVED',
@@ -160,9 +231,14 @@ router.post('/seed-dev', async (req: Request, res: Response): Promise<void> => {
       const v1 = await Vehicle.findOneAndUpdate(
         { shortVehicleNumber: 'TP1092' },
         {
+          vehicleId: 'DH-GAR-0001-V001',
+          garageCustomId: 'DH-GAR-0001',
           registrationNumber: 'DHK-HA-1092',
-          qrIdentifier: qrService.generateSignedToken('TP1092'),
+          qrIdentifier: qrService.generateSignedToken('DH-GAR-0001-V001'),
           ownershipType: 'GARAGE_REGISTERED',
+          city: 'Dhaka',
+          cityCode: 'DH',
+          area: 'Motijheel',
           garageId: testGarage._id,
           verificationStatus: 'APPROVED',
           status: 'AVAILABLE',
@@ -175,9 +251,14 @@ router.post('/seed-dev', async (req: Request, res: Response): Promise<void> => {
       const v2 = await Vehicle.findOneAndUpdate(
         { shortVehicleNumber: 'DHK-1042' },
         {
+          vehicleId: 'DH-GAR-0001-V002',
+          garageCustomId: 'DH-GAR-0001',
           registrationNumber: 'DHK-HA-1042',
-          qrIdentifier: qrService.generateSignedToken('DHK-1042'),
+          qrIdentifier: qrService.generateSignedToken('DH-GAR-0001-V002'),
           ownershipType: 'GARAGE_REGISTERED',
+          city: 'Dhaka',
+          cityCode: 'DH',
+          area: 'Motijheel',
           garageId: testGarage._id,
           verificationStatus: 'APPROVED',
           status: 'AVAILABLE',
@@ -190,9 +271,14 @@ router.post('/seed-dev', async (req: Request, res: Response): Promise<void> => {
       await Vehicle.findOneAndUpdate(
         { shortVehicleNumber: 'TP1099' },
         {
+          vehicleId: 'DH-GAR-0001-V003',
+          garageCustomId: 'DH-GAR-0001',
           registrationNumber: 'DHK-HA-1099',
-          qrIdentifier: qrService.generateSignedToken('TP1099'),
+          qrIdentifier: qrService.generateSignedToken('DH-GAR-0001-V003'),
           ownershipType: 'GARAGE_REGISTERED',
+          city: 'Dhaka',
+          cityCode: 'DH',
+          area: 'Motijheel',
           garageId: testGarage._id,
           verificationStatus: 'PENDING',
           status: 'OFFLINE',
@@ -205,6 +291,12 @@ router.post('/seed-dev', async (req: Request, res: Response): Promise<void> => {
       // Seed GarageDriver link for Rahim (01700000003)
       const rahimUser = userMap['01700000003'];
       if (rahimUser) {
+        rahimUser.nidNumber = '19922691234567891';
+        rahimUser.nidStatus = 'VERIFIED';
+        rahimUser.city = 'Dhaka';
+        rahimUser.area = 'Motijheel';
+        await rahimUser.save();
+
         await GarageDriver.findOneAndUpdate(
           { garageId: testGarage._id, driverId: rahimUser._id },
           { status: 'ACTIVE', assignedAt: new Date() },
@@ -230,12 +322,22 @@ router.post('/seed-dev', async (req: Request, res: Response): Promise<void> => {
       const { VehicleDriver } = await import('../models/VehicleDriver');
       const { qrService } = await import('../services/qrService');
 
+      karimUser.nidNumber = '19952691234567892';
+      karimUser.nidStatus = 'VERIFIED';
+      karimUser.city = 'Dhaka';
+      karimUser.area = 'Dhanmondi';
+      await karimUser.save();
+
       const selfVeh = await Vehicle.findOneAndUpdate(
         { shortVehicleNumber: 'SV-2041' },
         {
+          vehicleId: 'DH-OWN-0001',
           registrationNumber: 'DHK-HA-2041',
-          qrIdentifier: qrService.generateSignedToken('SV-2041'),
+          qrIdentifier: qrService.generateSignedToken('DH-OWN-0001'),
           ownershipType: 'SELF_OWNED',
+          city: 'Dhaka',
+          cityCode: 'DH',
+          area: 'Dhanmondi',
           assignedDriverId: karimUser._id,
           verificationStatus: 'APPROVED',
           status: 'OFFLINE',

@@ -9,15 +9,25 @@ export interface DriverProfileData {
   role: string;
   driverMode: 'GARAGE_REGISTERED' | 'SELF_OWNED';
   accountStatus: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED' | 'DISABLED';
+  nidNumber?: string;
+  nidStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  nidDocumentRef?: string;
+  city?: string;
+  area?: string;
+  address?: string;
+  isIdentityProtected?: boolean;
   createdAt: string;
 }
 
 export interface DriverGarageRelation {
   relationId: string;
   garageId: string | null;
+  garageCustomId?: string;
   garageName: string;
   garagePhone: string;
   garageAddress: string;
+  garageCity?: string;
+  garageArea?: string;
   garageVerificationStatus: string;
   garageConfirmationStatus: 'PENDING' | 'ACTIVE' | 'INACTIVE' | 'TERMINATED';
   assignedAt?: string;
@@ -25,6 +35,8 @@ export interface DriverGarageRelation {
 
 export interface DriverVehicleData {
   id: string;
+  vehicleId?: string;
+  garageCustomId?: string;
   shortVehicleNumber: string;
   registrationNumber: string;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
@@ -40,6 +52,7 @@ export interface DriverHistoryRecord {
   _id: string;
   vehicleId: {
     _id: string;
+    vehicleId?: string;
     shortVehicleNumber: string;
     registrationNumber: string;
     ownershipType: string;
@@ -74,6 +87,27 @@ class DriverService {
       return data;
     } catch (e: any) {
       return { success: false, error: e.message || 'Network error fetching driver profile' };
+    }
+  }
+
+  public async submitNid(payload: {
+    nidNumber: string;
+    nidDocumentRef?: string;
+    city?: string;
+    area?: string;
+    address?: string;
+  }): Promise<{ success: boolean; message?: string; nidNumber?: string; nidStatus?: string; error?: string }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const res = await fetch(`${env.apiUrl}/api/driver/nid`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      return data;
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Network error submitting NID details' };
     }
   }
 
@@ -133,6 +167,8 @@ class DriverService {
     registrationNumber: string;
     modelName?: string;
     manufacturingYear?: number;
+    city?: string;
+    area?: string;
   }): Promise<{ success: boolean; message?: string; vehicle?: DriverVehicleData; error?: string }> {
     try {
       const headers = await this.getAuthHeaders();

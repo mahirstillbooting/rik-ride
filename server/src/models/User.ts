@@ -3,6 +3,7 @@ import { Schema, model, Document } from 'mongoose';
 export type UserRole = 'ADMIN' | 'GARAGE_OWNER' | 'DRIVER' | 'PASSENGER';
 export type DriverOperatingMode = 'GARAGE_REGISTERED' | 'SELF_OWNED';
 export type AccountStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED' | 'DISABLED';
+export type NidStatus = 'PENDING' | 'VERIFIED' | 'REJECTED';
 
 export interface IUser extends Document {
   phone: string;
@@ -12,6 +13,17 @@ export interface IUser extends Document {
   role: UserRole;
   driverMode?: DriverOperatingMode; // Applies when role === 'DRIVER'
   accountStatus: AccountStatus;
+  
+  // Mandatory NID & Identity Fields
+  nidNumber?: string;
+  nidStatus?: NidStatus;
+  nidDocumentRef?: string;
+  city?: string;
+  cityCode?: string;
+  area?: string;
+  address?: string;
+  isIdentityProtected?: boolean;
+
   profileImage?: string;
   lastLoginAt?: Date;
   metadata?: Record<string, unknown>;
@@ -43,6 +55,22 @@ const UserSchema = new Schema<IUser>(
       default: 'PENDING',
       index: true,
     },
+
+    // Mandatory NID & Identity Fields
+    nidNumber: { type: String, trim: true, sparse: true, index: true },
+    nidStatus: {
+      type: String,
+      enum: ['PENDING', 'VERIFIED', 'REJECTED'],
+      default: 'PENDING',
+      index: true,
+    },
+    nidDocumentRef: { type: String },
+    city: { type: String, default: 'Dhaka', trim: true },
+    cityCode: { type: String, default: 'DH', uppercase: true, trim: true },
+    area: { type: String, trim: true },
+    address: { type: String, trim: true },
+    isIdentityProtected: { type: Boolean, default: true },
+
     profileImage: { type: String },
     lastLoginAt: { type: Date },
     metadata: { type: Schema.Types.Mixed },

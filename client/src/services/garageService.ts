@@ -3,8 +3,12 @@ import { AuthStorage } from '../context/AuthStorage';
 
 export interface GarageProfile {
   _id: string;
+  garageId?: string;
   ownerId: string;
   name: string;
+  city?: string;
+  cityCode?: string;
+  area?: string;
   address: string;
   phone: string;
   verificationStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
@@ -25,11 +29,16 @@ export interface GarageStats {
 
 export interface GarageVehicle {
   _id: string;
+  vehicleId?: string;
+  garageCustomId?: string;
   shortVehicleNumber: string;
   registrationNumber: string;
   qrIdentifier: string;
   ownershipType: 'GARAGE_REGISTERED' | 'SELF_OWNED';
-  garageId?: { _id: string; name: string };
+  city?: string;
+  cityCode?: string;
+  area?: string;
+  garageId?: { _id: string; garageId?: string; name: string };
   assignedDriverId?: {
     _id: string;
     name: string;
@@ -57,6 +66,7 @@ export interface GarageDriverItem {
   terminatedAt?: string;
   assignedVehicle?: {
     id: string;
+    vehicleId?: string;
     shortVehicleNumber: string;
     registrationNumber: string;
     status: string;
@@ -68,6 +78,7 @@ export interface DriverHistoryItem {
   _id: string;
   vehicleId: {
     _id: string;
+    vehicleId?: string;
     shortVehicleNumber: string;
     registrationNumber: string;
     modelName?: string;
@@ -102,6 +113,8 @@ class GarageService {
     address: string;
     phone: string;
     capacity?: number;
+    city?: string;
+    area?: string;
   }): Promise<{ success: boolean; garage?: GarageProfile; error?: string }> {
     try {
       const headers = await this.getAuthHeaders();
@@ -122,6 +135,8 @@ class GarageService {
     address?: string;
     phone?: string;
     capacity?: number;
+    city?: string;
+    area?: string;
   }): Promise<{ success: boolean; garage?: GarageProfile; error?: string }> {
     try {
       const headers = await this.getAuthHeaders();
@@ -180,6 +195,8 @@ class GarageService {
     registrationNumber: string;
     modelName?: string;
     manufacturingYear?: number;
+    city?: string;
+    area?: string;
   }): Promise<{ success: boolean; message?: string; vehicle?: GarageVehicle; error?: string }> {
     try {
       const headers = await this.getAuthHeaders();

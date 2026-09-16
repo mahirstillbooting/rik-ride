@@ -8,6 +8,8 @@ import { VehicleDriver } from '../models/VehicleDriver';
 import { auditService } from '../services/auditService';
 import { qrService } from '../services/qrService';
 
+import { generateGarageId, generateGarageVehicleId } from '../services/idGeneratorService';
+
 const router = Router();
 
 // Require JWT authentication and GARAGE_OWNER role for all endpoints in this router
@@ -15,10 +17,17 @@ router.use(requireAuth);
 router.use(requireRole('GARAGE_OWNER'));
 
 /**
- * Helper to fetch authenticated user's garage doc
+ * Helper to fetch authenticated user's garage doc with lazy garageId generation
  */
 async function getOwnerGarage(ownerId: string) {
-  return await Garage.findOne({ ownerId });
+  const garage = await Garage.findOne({ ownerId });
+  if (garage && !garage.garageId) {
+    const { garageId, cityCode } = await generateGarageId(garage.city || 'Dhaka');
+    garage.garageId = garageId;
+    garage.cityCode = cityCode;
+    await garage.save();
+  }
+  return garage;
 }
 
 /**
@@ -60,16 +69,22 @@ router.post('/create', async (req: AuthenticatedRequest, res: Response): Promise
       return;
     }
 
-    const { name, address, phone, capacity } = req.body;
+    const { name, address, phone, capacity, city, area } = req.body;
 
     if (!name || !address || !phone) {
       res.status(400).json({ error: 'Name, address, and contact phone are required.' });
       return;
     }
 
+    const { garageId, cityCode } = await generateGarageId(city || 'Dhaka');
+
     const newGarage = await Garage.create({
+      garageId,
       ownerId: req.user!.id,
       name: name.trim(),
+      city: city ? city.trim() : 'Dhaka',
+      cityCode,
+      area: area ? area.trim() : 'General',
       address: address.trim(),
       phone: phone.trim(),
       capacity: Number(capacity) || 10,
@@ -82,12 +97,12 @@ router.post('/create', async (req: AuthenticatedRequest, res: Response): Promise
       entity: 'GARAGE',
       entityId: (newGarage._id as object).toString(),
       ipAddress: req.ip,
-      metadata: { name: newGarage.name, verificationStatus: newGarage.verificationStatus },
+      metadata: { garageId: newGarage.garageId, name: newGarage.name, verificationStatus: newGarage.verificationStatus },
     });
 
     res.status(201).json({
       success: true,
-      message: 'Garage profile created successfully and submitted for Admin approval.',
+      message: `Garage profile [${garageId}] created successfully and submitted for Admin approval.`,
       garage: newGarage,
     });
   } catch (error: any) {
@@ -97,7 +112,7 @@ router.post('/create', async (req: AuthenticatedRequest, res: Response): Promise
 
 /**
  * PUT /api/garage/profile
- * Update existing garage details (cannot update verificationStatus)
+ * Update existing garage details (cannot update garageId or verificationStatus)
  */
 router.put('/profile', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -107,11 +122,15 @@ router.put('/profile', async (req: AuthenticatedRequest, res: Response): Promise
       return;
     }
 
-    const { name, address, phone, capacity } = req.body;
+    const { name, address, phone, capacity, city, area } = req.body;
 
     if (name) garage.name = name.trim();
     if (address) garage.address = address.trim();
     if (phone) garage.phone = phone.trim();
+    if (city) {
+      garage.city = city.trim();
+    }
+    if (area) garage.area = area.trim();
     if (capacity !== undefined) garage.capacity = Number(capacity);
 
     await garage.save();
@@ -256,7 +275,7 @@ router.post('/vehicles', async (req: AuthenticatedRequest, res: Response): Promi
       return;
     }
 
-    const { shortVehicleNumber, registrationNumber, modelName, manufacturingYear } = req.body;
+    const { shortVehicleNumber, registrationNumber, modelName, manufacturingYear, city, area } = req.body;
 
     if (!shortVehicleNumber || !registrationNumber) {
       res.status(400).json({ error: 'Short vehicle number and registration number are required.' });
@@ -280,13 +299,27 @@ router.post('/vehicles', async (req: AuthenticatedRequest, res: Response): Promi
       return;
     }
 
-    const qrIdentifier = qrService.generateSignedToken(cleanShortNum);
+    // Generate structured human-readable Vehicle ID
+    if (!garage.garageId) {
+      const { garageId, cityCode } = await generateGarageId(garage.city || 'Dhaka');
+      garage.garageId = garageId;
+      garage.cityCode = cityCode;
+      await garage.save();
+    }
+    const vehicleId = await generateGarageVehicleId(garage.garageId);
+
+    const qrIdentifier = qrService.generateSignedToken(vehicleId || cleanShortNum);
 
     const vehicle = await Vehicle.create({
+      vehicleId,
+      garageCustomId: garage.garageId,
       shortVehicleNumber: cleanShortNum,
       registrationNumber: cleanRegNum,
       qrIdentifier,
       ownershipType: 'GARAGE_REGISTERED',
+      city: city ? city.trim() : garage.city || 'Dhaka',
+      cityCode: garage.cityCode || 'DH',
+      area: area ? area.trim() : garage.area,
       garageId: garage._id,
       verificationStatus: 'PENDING', // Requires Admin vehicle approval
       status: 'OFFLINE',
@@ -305,15 +338,17 @@ router.post('/vehicles', async (req: AuthenticatedRequest, res: Response): Promi
       entityId: (vehicle._id as object).toString(),
       ipAddress: req.ip,
       metadata: {
+        vehicleId: vehicle.vehicleId,
         shortVehicleNumber: vehicle.shortVehicleNumber,
         registrationNumber: vehicle.registrationNumber,
         garageId: garage._id.toString(),
+        garageCustomId: garage.garageId,
       },
     });
 
     res.status(201).json({
       success: true,
-      message: `Vehicle ${cleanShortNum} registered successfully and submitted for Admin approval.`,
+      message: `Vehicle ${vehicleId} (${cleanShortNum}) registered successfully and submitted for Admin approval.`,
       vehicle,
     });
   } catch (error: any) {

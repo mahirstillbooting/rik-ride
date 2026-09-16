@@ -22,6 +22,12 @@ export interface AdminStats {
 
 export interface PendingQueueItem {
   id: string;
+  garageId?: string;
+  vehicleId?: string;
+  garageCustomId?: string;
+  nidNumber?: string;
+  city?: string;
+  area?: string;
   entityType: 'USER' | 'GARAGE' | 'VEHICLE';
   title: string;
   subtitle: string;

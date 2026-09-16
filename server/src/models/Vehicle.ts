@@ -10,10 +10,15 @@ export interface IGeoPoint {
 }
 
 export interface IVehicle extends Document {
-  shortVehicleNumber: string; // Unique human-readable short car number (e.g. D-1024)
-  registrationNumber: string;
-  qrIdentifier: string; // Cryptographically signed token (HMAC), not raw _id
+  vehicleId: string; // Permanent structured human-readable System ID (e.g. DH-GAR-0001-V001 or DH-OWN-0001)
+  garageCustomId?: string; // Human-readable Garage ID reference
+  shortVehicleNumber: string; // Short car/vehicle number (e.g. D-1024)
+  registrationNumber: string; // Physical paper/plate registration number
+  qrIdentifier: string; // Cryptographically signed token (HMAC) for QR generation
   ownershipType: DriverOwnershipMode;
+  city?: string;
+  cityCode?: string;
+  area?: string;
   garageId?: Types.ObjectId;
   assignedDriverId?: Types.ObjectId;
   verificationStatus: VehicleVerificationStatus;
@@ -27,6 +32,20 @@ export interface IVehicle extends Document {
 
 const VehicleSchema = new Schema<IVehicle>(
   {
+    vehicleId: {
+      type: String,
+      unique: true,
+      index: true,
+      uppercase: true,
+      trim: true,
+      sparse: true,
+    },
+    garageCustomId: {
+      type: String,
+      index: true,
+      uppercase: true,
+      trim: true,
+    },
     shortVehicleNumber: {
       type: String,
       required: true,
@@ -43,6 +62,9 @@ const VehicleSchema = new Schema<IVehicle>(
       required: true,
       index: true,
     },
+    city: { type: String, default: 'Dhaka', trim: true, index: true },
+    cityCode: { type: String, default: 'DH', uppercase: true, trim: true },
+    area: { type: String, trim: true },
     garageId: { type: Schema.Types.ObjectId, ref: 'Garage', index: true },
     assignedDriverId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     verificationStatus: {
@@ -80,4 +102,3 @@ const VehicleSchema = new Schema<IVehicle>(
 VehicleSchema.index({ location: '2dsphere' });
 
 export const Vehicle = model<IVehicle>('Vehicle', VehicleSchema);
-

@@ -91,11 +91,11 @@ router.get('/stats', async (_req: AuthenticatedRequest, res: Response): Promise<
 router.get('/pending', async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const [pendingUsers, pendingGarages, pendingVehicles] = await Promise.all([
-      User.find({ accountStatus: 'PENDING' }).select('name phone role driverMode createdAt').lean(),
+      User.find({ accountStatus: 'PENDING' }).select('name phone role driverMode nidNumber nidStatus city area createdAt').lean(),
       Garage.find({ verificationStatus: 'PENDING' }).populate('ownerId', 'name phone').lean(),
       Vehicle.find({ verificationStatus: 'PENDING' })
         .populate('assignedDriverId', 'name phone')
-        .populate('garageId', 'name')
+        .populate('garageId', 'garageId name')
         .lean(),
     ]);
 
@@ -104,25 +104,33 @@ router.get('/pending', async (_req: AuthenticatedRequest, res: Response): Promis
         id: u._id.toString(),
         entityType: 'USER',
         title: u.name,
-        subtitle: `Role: ${u.role}${u.driverMode ? ` (${u.driverMode})` : ''}`,
+        subtitle: `Role: ${u.role}${u.driverMode ? ` (${u.driverMode})` : ''}${u.nidNumber ? ` | NID: ${u.nidNumber}` : ''}`,
         phone: u.phone,
+        nidNumber: u.nidNumber || null,
+        city: u.city || 'Dhaka',
+        area: u.area || '',
         status: u.accountStatus,
         createdAt: u.createdAt,
       })),
       ...pendingGarages.map((g: any) => ({
         id: g._id.toString(),
+        garageId: g.garageId || 'DH-GAR-0001',
         entityType: 'GARAGE',
-        title: g.name,
-        subtitle: `Owner: ${g.ownerId?.name || 'Unknown'} (${g.ownerId?.phone || g.phone})`,
+        title: `${g.name} (${g.garageId || 'DH-GAR-0001'})`,
+        subtitle: `Owner: ${g.ownerId?.name || 'Unknown'} (${g.ownerId?.phone || g.phone}) | ${g.city || 'Dhaka'}`,
         phone: g.phone,
         address: g.address,
+        city: g.city || 'Dhaka',
+        area: g.area || '',
         status: g.verificationStatus,
         createdAt: g.createdAt,
       })),
       ...pendingVehicles.map((v: any) => ({
         id: v._id.toString(),
+        vehicleId: v.vehicleId || v.shortVehicleNumber,
+        garageCustomId: v.garageCustomId || v.garageId?.garageId || null,
         entityType: 'VEHICLE',
-        title: `Vehicle ${v.shortVehicleNumber || v.registrationNumber}`,
+        title: `Vehicle ${v.vehicleId || v.shortVehicleNumber}`,
         subtitle: `Reg: ${v.registrationNumber} | Mode: ${v.ownershipType}`,
         driverName: v.assignedDriverId?.name,
         garageName: v.garageId?.name,

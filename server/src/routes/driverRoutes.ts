@@ -6,6 +6,7 @@ import { VehicleDriver } from '../models/VehicleDriver';
 import { Vehicle } from '../models/Vehicle';
 import { auditService } from '../services/auditService';
 import { qrService } from '../services/qrService';
+import { generateSelfOwnedVehicleId } from '../services/idGeneratorService';
 
 const router = Router();
 
@@ -15,8 +16,8 @@ router.use(requireRole('DRIVER'));
 
 /**
  * GET /api/driver/me
- * Consolidated endpoint returning driver identity, operating mode, Admin account status,
- * garage relationship (for Garage Driver), and vehicle relationship.
+ * Consolidated endpoint returning driver identity, NID status, operating mode, Admin account status,
+ * garage relationship (for Garage Driver), and vehicle relationship with structured vehicleId.
  */
 router.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -36,7 +37,7 @@ router.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<void
         driverId: req.user!.id,
         status: { $ne: 'TERMINATED' },
       })
-        .populate('garageId', 'name address phone verificationStatus capacity')
+        .populate('garageId', 'garageId name address phone verificationStatus capacity city area')
         .sort({ createdAt: -1 })
         .lean();
 
@@ -45,9 +46,12 @@ router.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<void
         garageRelation = {
           relationId: (relDoc._id as object).toString(),
           garageId: garageObj?._id ? (garageObj._id as object).toString() : null,
+          garageCustomId: garageObj?.garageId || 'DH-GAR-0001',
           garageName: garageObj?.name || 'Unknown Garage',
           garagePhone: garageObj?.phone || '',
           garageAddress: garageObj?.address || '',
+          garageCity: garageObj?.city || 'Dhaka',
+          garageArea: garageObj?.area || '',
           garageVerificationStatus: garageObj?.verificationStatus || 'PENDING',
           garageConfirmationStatus: relDoc.status, // 'PENDING' | 'ACTIVE' | 'INACTIVE'
           assignedAt: relDoc.assignedAt,
@@ -56,8 +60,8 @@ router.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<void
 
       // Fetch assigned vehicle for this driver
       vehicle = await Vehicle.findOne({ assignedDriverId: req.user!.id })
-        .populate('garageId', 'name phone')
-        .select('shortVehicleNumber registrationNumber verificationStatus status modelName manufacturingYear qrIdentifier ownershipType')
+        .populate('garageId', 'garageId name phone')
+        .select('vehicleId garageCustomId shortVehicleNumber registrationNumber verificationStatus status modelName manufacturingYear qrIdentifier ownershipType city area')
         .lean();
     } else {
       // SELF_OWNED Driver: Fetch self-owned vehicle
@@ -65,7 +69,7 @@ router.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<void
         assignedDriverId: req.user!.id,
         ownershipType: 'SELF_OWNED',
       })
-        .select('shortVehicleNumber registrationNumber verificationStatus status modelName manufacturingYear qrIdentifier ownershipType')
+        .select('vehicleId garageCustomId shortVehicleNumber registrationNumber verificationStatus status modelName manufacturingYear qrIdentifier ownershipType city area')
         .lean();
     }
 
@@ -79,12 +83,21 @@ router.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<void
         role: driverDoc.role,
         driverMode: driverDoc.driverMode,
         accountStatus: driverDoc.accountStatus, // Admin Platform Status: PENDING | ACTIVE | REJECTED | SUSPENDED
+        nidNumber: driverDoc.nidNumber || null,
+        nidStatus: driverDoc.nidStatus || 'PENDING',
+        nidDocumentRef: driverDoc.nidDocumentRef || null,
+        city: driverDoc.city || 'Dhaka',
+        area: driverDoc.area || '',
+        address: driverDoc.address || '',
+        isIdentityProtected: driverDoc.isIdentityProtected ?? true,
         createdAt: driverDoc.createdAt,
       },
       garageRelation,
       vehicle: vehicle
         ? {
             id: (vehicle._id as object).toString(),
+            vehicleId: (vehicle as any).vehicleId || (vehicle as any).shortVehicleNumber,
+            garageCustomId: (vehicle as any).garageCustomId || null,
             shortVehicleNumber: vehicle.shortVehicleNumber,
             registrationNumber: vehicle.registrationNumber,
             verificationStatus: vehicle.verificationStatus, // Admin Vehicle Approval: PENDING | APPROVED | REJECTED | SUSPENDED
@@ -100,6 +113,67 @@ router.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<void
     });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to fetch driver profile', details: error.message });
+  }
+});
+
+/**
+ * POST /api/driver/nid
+ * Submit or update driver NID identity number and document photo reference
+ */
+router.post('/nid', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const driverDoc = await User.findById(req.user!.id);
+    if (!driverDoc || driverDoc.role !== 'DRIVER') {
+      res.status(403).json({ error: 'Driver authorization required.' });
+      return;
+    }
+
+    const { nidNumber, nidDocumentRef, city, area, address } = req.body;
+
+    if (!nidNumber) {
+      res.status(400).json({ error: 'NID number is mandatory for driver identity.' });
+      return;
+    }
+
+    const cleanNid = nidNumber.trim();
+
+    // Check NID Uniqueness across all users
+    const existingUser = await User.findOne({
+      nidNumber: cleanNid,
+      _id: { $ne: driverDoc._id },
+    });
+    if (existingUser) {
+      res.status(400).json({ error: `NID number [${cleanNid}] is already registered under another account.` });
+      return;
+    }
+
+    driverDoc.nidNumber = cleanNid;
+    driverDoc.nidStatus = 'PENDING'; // Resubmits for Admin NID verification
+    if (nidDocumentRef) driverDoc.nidDocumentRef = nidDocumentRef.trim();
+    if (city) driverDoc.city = city.trim();
+    if (area) driverDoc.area = area.trim();
+    if (address) driverDoc.address = address.trim();
+    driverDoc.isIdentityProtected = true;
+
+    await driverDoc.save();
+
+    await auditService.logAction({
+      actorId: req.user!.id,
+      action: 'DRIVER_NID_SUBMIT',
+      entity: 'User',
+      entityId: (driverDoc._id as object).toString(),
+      ipAddress: req.ip,
+      metadata: { nidNumber: cleanNid, nidStatus: driverDoc.nidStatus },
+    });
+
+    res.json({
+      success: true,
+      message: 'NID identity submitted successfully and queued for Admin verification.',
+      nidNumber: driverDoc.nidNumber,
+      nidStatus: driverDoc.nidStatus,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to submit NID details', details: error.message });
   }
 });
 
@@ -121,7 +195,7 @@ router.get('/vehicle', async (req: AuthenticatedRequest, res: Response): Promise
     }
 
     const vehicle = await Vehicle.findOne(filter)
-      .populate('garageId', 'name address phone')
+      .populate('garageId', 'garageId name address phone')
       .lean();
 
     res.json({
@@ -157,7 +231,7 @@ router.get('/garage', async (req: AuthenticatedRequest, res: Response): Promise<
     }
 
     const associations = await GarageDriver.find({ driverId: req.user!.id })
-      .populate('garageId', 'name address phone verificationStatus capacity')
+      .populate('garageId', 'garageId name address phone verificationStatus capacity')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -179,7 +253,7 @@ router.get('/garage', async (req: AuthenticatedRequest, res: Response): Promise<
 router.get('/history', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const vehicleHistory = await VehicleDriver.find({ driverId: req.user!.id })
-      .populate('vehicleId', 'shortVehicleNumber registrationNumber ownershipType modelName')
+      .populate('vehicleId', 'vehicleId shortVehicleNumber registrationNumber ownershipType modelName')
       .sort({ assignedAt: -1 })
       .lean();
 
@@ -198,6 +272,7 @@ router.get('/history', async (req: AuthenticatedRequest, res: Response): Promise
 /**
  * POST /api/driver/self-owned-vehicle
  * Allow a Self-Owned Driver to register or update their self-owned rickshaw profile
+ * Generates permanent structured Vehicle ID (e.g. DH-OWN-0001)
  */
 router.post('/self-owned-vehicle', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -214,7 +289,7 @@ router.post('/self-owned-vehicle', async (req: AuthenticatedRequest, res: Respon
       return;
     }
 
-    const { shortVehicleNumber, registrationNumber, modelName, manufacturingYear } = req.body;
+    const { shortVehicleNumber, registrationNumber, modelName, manufacturingYear, city, area } = req.body;
 
     if (!shortVehicleNumber || !registrationNumber) {
       res.status(400).json({ error: 'Short vehicle number and registration number are required.' });
@@ -244,7 +319,9 @@ router.post('/self-owned-vehicle', async (req: AuthenticatedRequest, res: Respon
       return;
     }
 
-    const qrIdentifier = qrService.generateSignedToken(cleanShortNum);
+    // Generate structured human-readable Vehicle ID for self-owned vehicle (e.g. DH-OWN-0001)
+    const { vehicleId, cityCode } = await generateSelfOwnedVehicleId(city || driverDoc.city || 'Dhaka');
+    const qrIdentifier = qrService.generateSignedToken(vehicleId || cleanShortNum);
 
     // Upsert driver's self-owned vehicle
     let vehicle = await Vehicle.findOne({
@@ -253,19 +330,27 @@ router.post('/self-owned-vehicle', async (req: AuthenticatedRequest, res: Respon
     });
 
     if (vehicle) {
+      if (!vehicle.vehicleId) vehicle.vehicleId = vehicleId;
       vehicle.shortVehicleNumber = cleanShortNum;
       vehicle.registrationNumber = cleanRegNum;
       vehicle.qrIdentifier = qrIdentifier;
+      vehicle.city = city ? city.trim() : vehicle.city || 'Dhaka';
+      vehicle.cityCode = cityCode;
+      vehicle.area = area ? area.trim() : vehicle.area;
       vehicle.modelName = modelName ? modelName.trim() : vehicle.modelName;
       vehicle.manufacturingYear = manufacturingYear ? Number(manufacturingYear) : vehicle.manufacturingYear;
       vehicle.verificationStatus = 'PENDING'; // Resubmits for Admin vehicle approval
       await vehicle.save();
     } else {
       vehicle = await Vehicle.create({
+        vehicleId,
         shortVehicleNumber: cleanShortNum,
         registrationNumber: cleanRegNum,
         qrIdentifier,
         ownershipType: 'SELF_OWNED',
+        city: city ? city.trim() : driverDoc.city || 'Dhaka',
+        cityCode,
+        area: area ? area.trim() : driverDoc.area,
         assignedDriverId: req.user!.id,
         verificationStatus: 'PENDING', // Requires Admin vehicle approval
         status: 'OFFLINE',
@@ -293,6 +378,7 @@ router.post('/self-owned-vehicle', async (req: AuthenticatedRequest, res: Respon
       entityId: (vehicle._id as object).toString(),
       ipAddress: req.ip,
       metadata: {
+        vehicleId: vehicle.vehicleId,
         shortVehicleNumber: vehicle.shortVehicleNumber,
         registrationNumber: vehicle.registrationNumber,
         driverId: req.user!.id,
@@ -301,7 +387,7 @@ router.post('/self-owned-vehicle', async (req: AuthenticatedRequest, res: Respon
 
     res.status(200).json({
       success: true,
-      message: `Self-Owned Rickshaw ${cleanShortNum} registered successfully and submitted for Admin approval.`,
+      message: `Self-Owned Rickshaw [${vehicle.vehicleId}] registered successfully and submitted for Admin approval.`,
       vehicle,
     });
   } catch (error: any) {

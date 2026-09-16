@@ -4,6 +4,9 @@ import { useTheme } from '../../theme/ThemeContext';
 import { borderRadius, spacing } from '../../theme/spacing';
 import { Icon } from './Icon';
 import { Badge } from './Badge';
+import { Modal } from './Modal';
+import { Button } from './Button';
+import { NearbyRickshaw } from '../../services/passengerLocationService';
 
 export interface MapMarkerItem {
   id: string;
@@ -27,6 +30,8 @@ export interface RealMapContainerProps {
   allowExpand?: boolean;
   driverMarkers?: MapMarkerItem[];
   passengerMarkers?: MapMarkerItem[];
+  rickshawMarkers?: NearbyRickshaw[];
+  isPassengerView?: boolean;
 }
 
 export const RealMapContainer: React.FC<RealMapContainerProps> = ({
@@ -40,10 +45,16 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   allowExpand = true,
   driverMarkers = [],
   passengerMarkers = [],
+  rickshawMarkers = [],
+  isPassengerView = false,
 }) => {
   const { colors, mode } = useTheme();
 
-  // Admin PC / Device Live Location State
+  // Selected Rickshaw & Detail Modal States
+  const [selectedRickshaw, setSelectedRickshaw] = useState<NearbyRickshaw | null>(null);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+
+  // Device Live Location State
   const [deviceCoords, setDeviceCoords] = useState<{
     lat: number;
     lng: number;
@@ -62,6 +73,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   const markerRef = useRef<any>(null);
   const accuracyCircleRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
+  const rickshawLayerGroupRef = useRef<any>(null);
 
   const [isUserPanning, setIsUserPanning] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -77,14 +89,13 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   const modalMarkerRef = useRef<any>(null);
   const modalAccuracyCircleRef = useRef<any>(null);
   const modalTileLayerRef = useRef<any>(null);
+  const modalRickshawLayerGroupRef = useRef<any>(null);
 
-  // -------------------------------------------------------------
-  // 1. ACQUIRE ACTUAL ADMIN PC LIVE GPS LOCATION
-  // -------------------------------------------------------------
+  // Acquire Browser Geolocation if no props provided
   useEffect(() => {
+    if (propLat !== undefined && propLng !== undefined) return;
     if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.geolocation) return;
 
-    // Request actual Admin PC browser geolocation
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const { latitude, longitude, accuracy } = pos.coords;
@@ -92,15 +103,15 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
           lat: latitude,
           lng: longitude,
           accuracy: accuracy || undefined,
-          source: 'ADMIN_PC_LIVE_GPS',
+          source: 'DEVICE_GPS',
         });
       },
       (err) => {
-        console.warn('Browser GPS notification:', err.message);
+        console.warn('Browser GPS notice:', err.message);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
     );
-  }, []);
+  }, [propLat, propLng]);
 
   // Update coords if props explicitly change from parent
   useEffect(() => {
@@ -114,7 +125,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     }
   }, [propLat, propLng, propAccuracy]);
 
-  // Inject Leaflet & High-Visibility Dark Mode CSS animations
+  // Inject Leaflet & High-Visibility Dark Mode CSS
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
 
@@ -148,19 +159,32 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
           0% { opacity: 1; transform: scale(1) translateY(0); }
           100% { opacity: 0; transform: scale(0.95) translateY(8px); }
         }
+        @keyframes rikPulse {
+          0% { transform: scale(0.85); opacity: 0.85; }
+          50% { transform: scale(1.4); opacity: 0.2; }
+          100% { transform: scale(0.85); opacity: 0.85; }
+        }
         .rik-map-clickable {
           cursor: pointer;
         }
-        /* Sleek High-Visibility Dark Tile Filter for OpenStreetMap (Bright crisp text labels) */
         .rik-dark-tile-layer {
           filter: brightness(0.85) contrast(1.15) invert(0.92) hue-rotate(185deg) saturate(0.75) !important;
+        }
+        .leaflet-tooltip.rik-custom-leaflet-tooltip {
+          background: transparent !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+        }
+        .leaflet-tooltip.rik-custom-leaflet-tooltip::before {
+          display: none !important;
         }
       `;
       document.head.appendChild(styleEl);
     }
   }, []);
 
-  // Modal Open & Close Handlers with smooth animation & scroll preservation
+  // Modal Open & Close Handlers
   const handleOpenModal = () => {
     if (!allowExpand) return;
     setIsModalOpen(true);
@@ -181,7 +205,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     }, 220);
   };
 
-  // Keyboard listener for Escape key to close expanded map modal
+  // Keyboard listener for ESC key
   useEffect(() => {
     if (!isModalOpen || Platform.OS !== 'web' || typeof window === 'undefined') return;
 
@@ -197,8 +221,90 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     };
   }, [isModalOpen]);
 
+  // Direct Call Handler
+  const handleCallDriver = (phone: string) => {
+    if (typeof window !== 'undefined') {
+      window.location.href = `tel:${phone}`;
+    }
+  };
+
   // -------------------------------------------------------------
-  // 2. EMBEDDED MAP INITIALIZATION & UPDATES
+  // RENDER RICKSHAW MARKERS ON LEAFLET MAP INSTANCE
+  // -------------------------------------------------------------
+  const updateRickshawMarkersOnMap = (map: any, layerGroupRef: React.MutableRefObject<any>) => {
+    if (!map || Platform.OS !== 'web') return;
+    let L: any;
+    try {
+      L = require('leaflet');
+    } catch {
+      return;
+    }
+
+    if (!layerGroupRef.current) {
+      layerGroupRef.current = L.layerGroup().addTo(map);
+    } else {
+      layerGroupRef.current.clearLayers();
+    }
+
+    rickshawMarkers.forEach((r) => {
+      const rickshawIcon = L.divIcon({
+        className: 'rik-available-rickshaw-marker',
+        html: `
+          <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+            <div style="position: absolute; width: 34px; height: 34px; border-radius: 50%; background: rgba(226, 118, 58, 0.25); animation: rikPulse 2.5s infinite ease-in-out;"></div>
+            <div style="width: 28px; height: 28px; border-radius: 8px; background: #18181B; border: 1.5px solid #E2763A; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.6);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E2763A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="1" y="3" width="15" height="13" rx="2"></rect>
+                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                <circle cx="18.5" cy="18.5" r="2.5"></circle>
+              </svg>
+            </div>
+          </div>
+        `,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17],
+      });
+
+      const marker = L.marker([r.latitude, r.longitude], { icon: rickshawIcon });
+
+      // Hover Tooltip / Popover for Desktop
+      const tooltipContent = `
+        <div style="padding: 10px 12px; font-family: system-ui, -apple-system, sans-serif; background: #18181B; color: #FAFAFA; border: 1px solid #3F3F46; border-radius: 10px; min-width: 210px; box-shadow: 0 10px 25px rgba(0,0,0,0.7);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+            <span style="font-size: 13px; font-weight: 800; color: #E2763A;">Rickshaw ${r.shortVehicleNumber}</span>
+            <span style="font-size: 10px; font-weight: 800; color: #10B981; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); padding: 2px 6px; border-radius: 4px;">${r.status}</span>
+          </div>
+          <div style="font-size: 12px; color: #D4D4D8; margin-bottom: 4px;">
+            Driver: <strong>${r.driverName}</strong>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #A1A1AA; padding-top: 6px; border-top: 1px solid #27272A;">
+            <div>
+              ${r.avgRating ? `<span style="color: #F59E0B; font-weight: 800;">★ ${r.avgRating}</span> <span style="color: #71717A;">(${r.ratingsCount})</span>` : `<span style="color: #A1A1AA; font-style: italic;">★ New driver</span>`}
+            </div>
+            ${r.distanceKm !== null ? `<span style="color: #E2763A; font-weight: 700;">${r.distanceKm} km away</span>` : ''}
+          </div>
+        </div>
+      `;
+
+      marker.bindTooltip(tooltipContent, {
+        direction: 'top',
+        offset: [0, -18],
+        opacity: 1,
+        className: 'rik-custom-leaflet-tooltip',
+      });
+
+      // Click / Tap Handler: Select Rickshaw for anchored bottom card
+      marker.on('click', () => {
+        setSelectedRickshaw(r);
+      });
+
+      marker.addTo(layerGroupRef.current);
+    });
+  };
+
+  // -------------------------------------------------------------
+  // EMBEDDED MAP INITIALIZATION & UPDATES
   // -------------------------------------------------------------
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !mapContainerRef.current) return;
@@ -206,7 +312,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     let L: any;
     try {
       L = require('leaflet');
-    } catch (e: any) {
+    } catch {
       setMapError('Failed to load Leaflet map library');
       return;
     }
@@ -220,7 +326,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
           attributionControl: false,
         });
 
-        // 100% Free Public OpenStreetMap Tiles (NO API KEY, NO WATERMARK)
+        // 100% Free Public OpenStreetMap Tiles
         const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           subdomains: 'abc',
@@ -232,39 +338,38 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
           .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors')
           .addTo(map);
 
-        const driverIcon = L.divIcon({
-          className: 'rik-driver-location-marker',
-          html: `
-            <div style="position: relative; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
-              <div style="position: absolute; width: 30px; height: 30px; border-radius: 50%; background: rgba(226, 118, 58, 0.32); animation: rikPulse 2s infinite ease-in-out;"></div>
-              <div style="width: 15px; height: 15px; border-radius: 50%; background: #E2763A; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 10px rgba(0,0,0,0.45);"></div>
-            </div>
-            <style>
-              @keyframes rikPulse {
-                0% { transform: scale(0.8); opacity: 0.85; }
-                50% { transform: scale(1.45); opacity: 0.2; }
-                100% { transform: scale(0.8); opacity: 0.85; }
-              }
-            </style>
-          `,
-          iconSize: [30, 30],
-          iconAnchor: [15, 15],
+        // Marker Icon: Passenger "YOU" vs Driver Vehicle Marker
+        const mainIcon = L.divIcon({
+          className: isPassengerView ? 'rik-passenger-user-marker' : 'rik-driver-location-marker',
+          html: isPassengerView
+            ? `
+              <div style="position: relative; width: 32px; height: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <div style="width: 14px; height: 14px; border-radius: 50%; background: #10B981; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 10px rgba(0,0,0,0.5);"></div>
+                <div style="font-size: 9px; font-weight: 800; color: #FFFFFF; background: #10B981; padding: 1px 4px; border-radius: 3px; margin-top: 2px; text-transform: uppercase; box-shadow: 0 1px 4px rgba(0,0,0,0.4);">YOU</div>
+              </div>
+            `
+            : `
+              <div style="position: relative; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
+                <div style="position: absolute; width: 30px; height: 30px; border-radius: 50%; background: rgba(226, 118, 58, 0.32); animation: rikPulse 2s infinite ease-in-out;"></div>
+                <div style="width: 15px; height: 15px; border-radius: 50%; background: #E2763A; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 10px rgba(0,0,0,0.45);"></div>
+              </div>
+            `,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
         });
 
-        const marker = L.marker([deviceCoords.lat, deviceCoords.lng], { icon: driverIcon }).addTo(map);
+        const marker = L.marker([deviceCoords.lat, deviceCoords.lng], { icon: mainIcon }).addTo(map);
 
         map.on('dragstart', () => {
           setIsUserPanning(true);
-        });
-
-        map.on('click', () => {
-          handleOpenModal();
         });
 
         mapInstanceRef.current = map;
         markerRef.current = marker;
         tileLayerRef.current = tileLayer;
         setMapLoaded(true);
+
+        updateRickshawMarkersOnMap(map, rickshawLayerGroupRef);
       } catch (err: any) {
         setMapError(err.message || 'Error initializing interactive map');
       }
@@ -277,11 +382,19 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         markerRef.current = null;
         tileLayerRef.current = null;
         accuracyCircleRef.current = null;
+        rickshawLayerGroupRef.current = null;
       }
     };
   }, []);
 
-  // Update tile layer dark mode filter on theme toggle
+  // Update embedded rickshaw markers when prop changes
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      updateRickshawMarkersOnMap(mapInstanceRef.current, rickshawLayerGroupRef);
+    }
+  }, [rickshawMarkers]);
+
+  // Update dark mode class on theme toggle
   useEffect(() => {
     if (!mapInstanceRef.current || !tileLayerRef.current || Platform.OS !== 'web') return;
     const tileContainer = tileLayerRef.current.getContainer();
@@ -294,7 +407,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     }
   }, [mode]);
 
-  // Update embedded marker position & accuracy circle when deviceCoords changes
+  // Update position & accuracy circle
   useEffect(() => {
     if (!mapInstanceRef.current || !markerRef.current || Platform.OS !== 'web') return;
     let L: any;
@@ -314,8 +427,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
       } else {
         accuracyCircleRef.current = L.circle(newPos, {
           radius: deviceCoords.accuracy,
-          color: '#E2763A',
-          fillColor: '#E2763A',
+          color: isPassengerView ? '#10B981' : '#E2763A',
+          fillColor: isPassengerView ? '#10B981' : '#E2763A',
           fillOpacity: 0.10,
           weight: 1.5,
         }).addTo(mapInstanceRef.current);
@@ -325,9 +438,9 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     if (!isUserPanning) {
       mapInstanceRef.current.panTo(newPos, { animate: true, duration: 0.8 });
     }
-  }, [deviceCoords, isUserPanning]);
+  }, [deviceCoords, isUserPanning, isPassengerView]);
 
-  // Embedded map controls
+  // Map Controls
   const handleRecenter = () => {
     if (mapInstanceRef.current) {
       setIsUserPanning(false);
@@ -344,7 +457,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   };
 
   // -------------------------------------------------------------
-  // 3. EXPANDED FULLSCREEN MODAL MAP INITIALIZATION & UPDATES
+  // FULLSCREEN MODAL MAP INITIALIZATION & UPDATES
   // -------------------------------------------------------------
   useEffect(() => {
     if (!isModalOpen || Platform.OS !== 'web' || typeof window === 'undefined' || !modalMapContainerRef.current) return;
@@ -365,7 +478,6 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
           attributionControl: false,
         });
 
-        // 100% Free Public OpenStreetMap Tiles (NO API KEY, NO WATERMARK)
         const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           subdomains: 'abc',
@@ -377,19 +489,26 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
           .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors')
           .addTo(map);
 
-        const driverIcon = L.divIcon({
-          className: 'rik-driver-location-marker-modal',
-          html: `
-            <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
-              <div style="position: absolute; width: 36px; height: 36px; border-radius: 50%; background: rgba(226, 118, 58, 0.32); animation: rikPulse 2s infinite ease-in-out;"></div>
-              <div style="width: 17px; height: 17px; border-radius: 50%; background: #E2763A; border: 2.5px solid #FFFFFF; box-shadow: 0 3px 12px rgba(0,0,0,0.5);"></div>
-            </div>
-          `,
+        const mainIcon = L.divIcon({
+          className: isPassengerView ? 'rik-passenger-user-marker-modal' : 'rik-driver-location-marker-modal',
+          html: isPassengerView
+            ? `
+              <div style="position: relative; width: 36px; height: 36px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                <div style="width: 16px; height: 16px; border-radius: 50%; background: #10B981; border: 2.5px solid #FFFFFF; box-shadow: 0 3px 12px rgba(0,0,0,0.5);"></div>
+                <div style="font-size: 10px; font-weight: 800; color: #FFFFFF; background: #10B981; padding: 2px 6px; border-radius: 4px; margin-top: 2px; text-transform: uppercase;">YOU</div>
+              </div>
+            `
+            : `
+              <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+                <div style="position: absolute; width: 36px; height: 36px; border-radius: 50%; background: rgba(226, 118, 58, 0.32); animation: rikPulse 2s infinite ease-in-out;"></div>
+                <div style="width: 17px; height: 17px; border-radius: 50%; background: #E2763A; border: 2.5px solid #FFFFFF; box-shadow: 0 3px 12px rgba(0,0,0,0.5);"></div>
+              </div>
+            `,
           iconSize: [36, 36],
           iconAnchor: [18, 18],
         });
 
-        const marker = L.marker([deviceCoords.lat, deviceCoords.lng], { icon: driverIcon }).addTo(map);
+        const marker = L.marker([deviceCoords.lat, deviceCoords.lng], { icon: mainIcon }).addTo(map);
 
         map.on('dragstart', () => {
           setIsModalUserPanning(true);
@@ -399,7 +518,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         modalMarkerRef.current = marker;
         modalTileLayerRef.current = tileLayer;
 
-        // Invalidate size after modal scale transition completes to ensure full tile resolution
+        updateRickshawMarkersOnMap(map, modalRickshawLayerGroupRef);
+
         setTimeout(() => {
           if (modalMapInstanceRef.current) {
             modalMapInstanceRef.current.invalidateSize({ animate: false });
@@ -417,55 +537,17 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         modalMarkerRef.current = null;
         modalTileLayerRef.current = null;
         modalAccuracyCircleRef.current = null;
+        modalRickshawLayerGroupRef.current = null;
       }
     };
   }, [isModalOpen]);
 
-  // Update modal tile layer dark mode filter on theme toggle
+  // Update modal rickshaw markers when prop changes
   useEffect(() => {
-    if (!modalMapInstanceRef.current || !modalTileLayerRef.current || Platform.OS !== 'web') return;
-    const tileContainer = modalTileLayerRef.current.getContainer();
-    if (tileContainer) {
-      if (mode === 'dark') {
-        tileContainer.classList.add('rik-dark-tile-layer');
-      } else {
-        tileContainer.classList.remove('rik-dark-tile-layer');
-      }
+    if (modalMapInstanceRef.current) {
+      updateRickshawMarkersOnMap(modalMapInstanceRef.current, modalRickshawLayerGroupRef);
     }
-  }, [mode]);
-
-  // Update modal marker position & accuracy circle
-  useEffect(() => {
-    if (!modalMapInstanceRef.current || !modalMarkerRef.current || Platform.OS !== 'web') return;
-    let L: any;
-    try {
-      L = require('leaflet');
-    } catch {
-      return;
-    }
-
-    const newPos: [number, number] = [deviceCoords.lat, deviceCoords.lng];
-    modalMarkerRef.current.setLatLng(newPos);
-
-    if (deviceCoords.accuracy && deviceCoords.accuracy > 0) {
-      if (modalAccuracyCircleRef.current) {
-        modalAccuracyCircleRef.current.setLatLng(newPos);
-        modalAccuracyCircleRef.current.setRadius(deviceCoords.accuracy);
-      } else {
-        modalAccuracyCircleRef.current = L.circle(newPos, {
-          radius: deviceCoords.accuracy,
-          color: '#E2763A',
-          fillColor: '#E2763A',
-          fillOpacity: 0.10,
-          weight: 1.5,
-        }).addTo(modalMapInstanceRef.current);
-      }
-    }
-
-    if (!isModalUserPanning) {
-      modalMapInstanceRef.current.panTo(newPos, { animate: true, duration: 0.8 });
-    }
-  }, [deviceCoords, isModalUserPanning]);
+  }, [rickshawMarkers]);
 
   // Modal map control handlers
   const handleModalRecenter = () => {
@@ -507,7 +589,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
       <View style={[styles.mapHeaderOverlay, { backgroundColor: colors.overlay, borderColor: colors.borderSubtle }]}>
         <View style={styles.headerInfo}>
           <View style={styles.titleRow}>
-            <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
+            <View style={[styles.pulseDot, { backgroundColor: isPassengerView ? colors.success : colors.primary }]} />
             <Text style={[styles.mapTitle, { color: colors.textPrimary }]}>{title}</Text>
           </View>
           <Text style={[styles.mapSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
@@ -515,8 +597,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
 
         <View style={styles.badgeGroup}>
           <Badge
-            label={deviceCoords.source === 'ADMIN_PC_LIVE_GPS' ? 'LIVE PC GPS' : status.replace('_', ' ')}
-            variant={status === 'LOCATION_ACTIVE' || deviceCoords.source === 'ADMIN_PC_LIVE_GPS' ? 'success' : 'warning'}
+            label={`${rickshawMarkers.length} AVAILABLE RICKSHAWS`}
+            variant={rickshawMarkers.length > 0 ? 'success' : 'neutral'}
           />
 
           {allowExpand && (
@@ -536,8 +618,6 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         {Platform.OS === 'web' ? (
           <div
             ref={mapContainerRef}
-            onClick={handleOpenModal}
-            className="rik-map-clickable"
             style={{
               width: '100%',
               height: '100%',
@@ -551,7 +631,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
           </View>
         )}
 
-        {/* Floating Controls for Embedded Map */}
+        {/* Floating Map Controls for Embedded Map (Fixed high z-index & proper icons) */}
         <View style={styles.mapControls}>
           {allowExpand && (
             <TouchableOpacity
@@ -583,13 +663,55 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
             <Icon name="minus" size={14} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
+
+        {/* Anchored Rickshaw Summary Card (Mobile / Tap Marker Interaction) */}
+        {selectedRickshaw && (
+          <View style={[styles.selectedCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.primary }]}>
+            <View style={styles.selectedRow}>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.selectedTitle, { color: colors.primary }]}>
+                    Rickshaw {selectedRickshaw.shortVehicleNumber}
+                  </Text>
+                  <Badge label={selectedRickshaw.status} variant="success" />
+                </View>
+                <Text style={[styles.selectedDesc, { color: colors.textPrimary }]}>
+                  Driver: {selectedRickshaw.driverName} • {selectedRickshaw.avgRating ? `★ ${selectedRickshaw.avgRating} (${selectedRickshaw.ratingsCount})` : '★ New driver'}
+                  {selectedRickshaw.distanceKm !== null ? ` • ${selectedRickshaw.distanceKm} km away` : ''}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedRickshaw(null)} style={{ padding: 4 }}>
+                <Icon name="x" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.actionBtnRow}>
+              <Button
+                title="Call Driver"
+                variant="primary"
+                size="sm"
+                icon={<Icon name="phone" size={14} color="#FFFFFF" />}
+                onPress={() => handleCallDriver(selectedRickshaw.driverPhone)}
+              />
+              <Button
+                title="View Details"
+                variant="outline"
+                size="sm"
+                icon={<Icon name="info" size={14} color={colors.textPrimary} />}
+                onPress={() => setShowDetailModal(true)}
+              />
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Embedded Map Footer Banner */}
       <View style={[styles.mapFooterBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderSubtle }]}>
         <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-          {deviceCoords.source === 'ADMIN_PC_LIVE_GPS' ? 'Admin PC Location' : 'Current Position'}:{' '}
-          <Text style={{ color: colors.primary, fontWeight: '700' }}>{deviceCoords.lat.toFixed(5)}°, {deviceCoords.lng.toFixed(5)}°</Text>
+          {isPassengerView ? 'Your Position' : 'Position'}:{' '}
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>
+            {deviceCoords.lat.toFixed(5)}°, {deviceCoords.lng.toFixed(5)}°
+          </Text>
           {deviceCoords.accuracy ? ` • Accuracy: ±${deviceCoords.accuracy.toFixed(1)}m` : ''}
         </Text>
         {allowExpand ? (
@@ -599,15 +721,13 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         ) : (
           isUserPanning && (
             <TouchableOpacity onPress={handleRecenter}>
-              <Text style={[styles.recenterLink, { color: colors.primary }]}>Click to Recenter →</Text>
+              <Text style={[styles.recenterLink, { color: colors.primary }]}>Recenter →</Text>
             </TouchableOpacity>
           )
         )}
       </View>
 
-      {/* ------------------------------------------------------------- */}
-      {/* 4. FULLSCREEN COMMAND-CENTER MAP MODAL (SAME PAGE OVERLAY)     */}
-      {/* ------------------------------------------------------------- */}
+      {/* FULLSCREEN COMMAND-CENTER MAP MODAL */}
       {isModalOpen && Platform.OS === 'web' && (
         <div
           onClick={handleCloseModal}
@@ -617,7 +737,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(8, 9, 10, 0.82)',
+            backgroundColor: 'rgba(8, 9, 10, 0.84)',
             backdropFilter: 'blur(4px)',
             zIndex: 99999,
             display: 'flex',
@@ -647,7 +767,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
               position: 'relative',
             }}
           >
-            {/* Expanded Modal Command Header */}
+            {/* Modal Header */}
             <div
               style={{
                 padding: '12px 20px',
@@ -664,7 +784,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '15px', fontWeight: '800', color: colors.textPrimary, letterSpacing: '-0.2px' }}>
-                      {title || 'Dhaka GeoTelemetry Command Center'}
+                      {title}
                     </span>
                     <span
                       style={{
@@ -679,16 +799,15 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
                         textTransform: 'uppercase',
                       }}
                     >
-                      FULLSCREEN COMMAND MAP
+                      EXPANDED RADAR MAP
                     </span>
                   </div>
                   <div style={{ fontSize: '12px', color: colors.textSecondary, marginTop: '2px' }}>
-                    {subtitle || 'Live Device GPS & Fleet Position Telemetry Stream'}
+                    {subtitle}
                   </div>
                 </div>
               </div>
 
-              {/* Header Action Controls */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <TouchableOpacity
                   style={[styles.controlBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
@@ -720,7 +839,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
               </div>
             </div>
 
-            {/* Expanded Modal Leaflet Canvas Container */}
+            {/* Modal Leaflet Canvas */}
             <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
               <div
                 ref={modalMapContainerRef}
@@ -728,7 +847,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
               />
             </div>
 
-            {/* Expanded Modal Telemetry Footer Banner */}
+            {/* Modal Footer */}
             <div
               style={{
                 padding: '10px 20px',
@@ -743,28 +862,114 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
               }}
             >
               <div>
-                {deviceCoords.source === 'ADMIN_PC_LIVE_GPS' ? 'Admin PC Live Location' : 'Current Telemetry Position'}:{' '}
+                Position:{' '}
                 <strong style={{ color: colors.primary }}>
                   {deviceCoords.lat.toFixed(5)}°, {deviceCoords.lng.toFixed(5)}°
-                </strong>
-                {deviceCoords.accuracy ? ` • Accuracy: ±${deviceCoords.accuracy.toFixed(1)}m` : ''} • Stream Status:{' '}
-                <span style={{ color: colors.success, fontWeight: '700' }}>
-                  {deviceCoords.source === 'ADMIN_PC_LIVE_GPS' ? 'LIVE_PC_GPS' : status}
-                </span>
+                </strong>{' '}
+                • Available Rickshaws nearby:{' '}
+                <strong style={{ color: colors.success }}>{rickshawMarkers.length}</strong>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                {isModalUserPanning && (
-                  <TouchableOpacity onPress={handleModalRecenter}>
-                    <Text style={[styles.recenterLink, { color: colors.primary }]}>Click to Recenter Map →</Text>
-                  </TouchableOpacity>
-                )}
                 <span style={{ color: colors.textMuted, fontSize: '11px' }}>Press ESC or click outside to close</span>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* DRIVER & VEHICLE INFORMATION DETAIL MODAL */}
+      <Modal
+        visible={showDetailModal && !!selectedRickshaw}
+        onClose={() => setShowDetailModal(false)}
+        title={`Driver & Vehicle Information — ${selectedRickshaw?.shortVehicleNumber || ''}`}
+      >
+        {selectedRickshaw && (
+          <View style={styles.detailModalBody}>
+            {/* Driver Summary Box */}
+            <View style={[styles.detailSection, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+              <View style={styles.detailHeaderRow}>
+                <Icon name="user" size={20} color={colors.primary} />
+                <Text style={[styles.detailSectionTitle, { color: colors.textPrimary }]}>
+                  Driver Profile
+                </Text>
+                <Badge label={selectedRickshaw.status} variant="success" />
+              </View>
+
+              <View style={styles.detailGrid}>
+                <View style={styles.detailGridItem}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Driver Name</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedRickshaw.driverName}</Text>
+                </View>
+
+                <View style={styles.detailGridItem}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Aggregate Rating</Text>
+                  <Text style={[styles.detailVal, { color: selectedRickshaw.avgRating ? colors.warning : colors.textMuted }]}>
+                    {selectedRickshaw.avgRating ? `★ ${selectedRickshaw.avgRating} (${selectedRickshaw.ratingsCount} ratings)` : '★ New driver'}
+                  </Text>
+                </View>
+
+                <View style={styles.detailGridItem}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Completed Rides</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                    {selectedRickshaw.completedRidesCount} rides
+                  </Text>
+                </View>
+
+                <View style={styles.detailGridItem}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Platform Verification</Text>
+                  <Badge label="APPROVED DRIVER" variant="success" />
+                </View>
+              </View>
+            </View>
+
+            {/* Vehicle Summary Box */}
+            <View style={[styles.detailSection, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+              <View style={styles.detailHeaderRow}>
+                <Icon name="truck" size={20} color={colors.primary} />
+                <Text style={[styles.detailSectionTitle, { color: colors.textPrimary }]}>
+                  Electric Rickshaw Specification
+                </Text>
+              </View>
+
+              <View style={styles.detailGrid}>
+                <View style={styles.detailGridItem}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Short Vehicle #</Text>
+                  <Text style={[styles.detailVal, { color: colors.primary }]}>{selectedRickshaw.shortVehicleNumber}</Text>
+                </View>
+
+                <View style={styles.detailGridItem}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Registration Number</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedRickshaw.registrationNumber}</Text>
+                </View>
+
+                <View style={styles.detailGridItem}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>QR Identifier</Text>
+                  <Text style={[styles.detailVal, { color: colors.textSecondary, fontFamily: Platform.OS === 'web' ? 'monospace' : 'System' }]}>
+                    {selectedRickshaw.qrIdentifier}
+                  </Text>
+                </View>
+
+                <View style={styles.detailGridItem}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Ownership Mode</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedRickshaw.ownershipType}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Call Action */}
+            <View style={styles.detailActionRow}>
+              <Button
+                title={`Call Driver (${selectedRickshaw.driverName})`}
+                variant="primary"
+                size="lg"
+                icon={<Icon name="phone" size={18} color="#FFFFFF" />}
+                onPress={() => handleCallDriver(selectedRickshaw.driverPhone)}
+              />
+            </View>
+          </View>
+        )}
+      </Modal>
     </View>
   );
 };
@@ -830,54 +1035,77 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
   },
-  fallbackBox: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md,
-  },
   mapControls: {
     position: 'absolute',
     right: spacing.md,
-    bottom: spacing.md,
+    bottom: 60,
     gap: spacing.xs,
     zIndex: 1000,
   },
   controlBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: borderRadius.md,
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.sm,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalCloseBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: borderRadius.md,
+    width: 32,
+    height: 32,
+    borderRadius: borderRadius.sm,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  selectedCard: {
+    position: 'absolute',
+    left: spacing.md,
+    right: spacing.md,
+    bottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1.5,
+    zIndex: 9999,
+    gap: spacing.sm,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+  },
+  selectedRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  selectedTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  selectedDesc: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  actionBtnRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: 4,
   },
   mapFooterBanner: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 2,
     borderTopWidth: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    zIndex: 1000,
+    justifyContent: 'space-between',
   },
   footerText: {
-    fontSize: 12,
+    fontSize: 11,
   },
   recenterLink: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
   errorContainer: {
     padding: spacing.md,
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -886,5 +1114,52 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  fallbackBox: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailModalBody: {
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  detailSection: {
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+  },
+  detailHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  detailSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    flex: 1,
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: 4,
+  },
+  detailGridItem: {
+    flex: 1,
+    minWidth: 150,
+    gap: 2,
+  },
+  detailLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  detailVal: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  detailActionRow: {
+    marginTop: spacing.xs,
   },
 });

@@ -19,6 +19,32 @@ export interface PassengerLocationStatusResponse {
   error?: string;
 }
 
+export interface NearbyRickshaw {
+  id: string;
+  driverId: string;
+  driverName: string;
+  driverPhone: string;
+  vehicleId: string;
+  customVehicleId: string;
+  shortVehicleNumber: string;
+  registrationNumber: string;
+  qrIdentifier: string;
+  ownershipType: string;
+  modelName: string;
+  verificationStatus: string;
+  status: string;
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  speed?: number;
+  heading?: number;
+  distanceKm: number | null;
+  avgRating: number | null;
+  ratingsCount: number;
+  completedRidesCount: number;
+  updatedAt: string;
+}
+
 class PassengerLocationApiService {
   private async getAuthHeaders(): Promise<HeadersInit> {
     const token = await AuthStorage.getToken();
@@ -36,6 +62,32 @@ class PassengerLocationApiService {
       return data;
     } catch (e: any) {
       return { success: false, error: e.message || 'Network error fetching passenger location status' };
+    }
+  }
+
+  public async getNearbyAvailableRickshaws(
+    latitude?: number,
+    longitude?: number,
+    radiusKm: number = 2
+  ): Promise<{
+    success: boolean;
+    count?: number;
+    radiusKm?: number;
+    rickshaws?: NearbyRickshaw[];
+    error?: string;
+  }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const queryParams = new URLSearchParams();
+      if (latitude !== undefined && !isNaN(latitude)) queryParams.append('latitude', latitude.toString());
+      if (longitude !== undefined && !isNaN(longitude)) queryParams.append('longitude', longitude.toString());
+      queryParams.append('radiusKm', radiusKm.toString());
+
+      const res = await fetch(`${env.apiUrl}/api/passenger/location/nearby-rickshaws?${queryParams.toString()}`, { headers });
+      const data = await res.json();
+      return data;
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Network error fetching nearby rickshaws' };
     }
   }
 

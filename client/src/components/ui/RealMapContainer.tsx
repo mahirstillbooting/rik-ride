@@ -16,6 +16,8 @@ export interface RealMapContainerProps {
   allowExpand?: boolean;
   driverMarkers?: any[];
   passengerMarkers?: any[];
+  rickshawMarkers?: any[];
+  isPassengerView?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 

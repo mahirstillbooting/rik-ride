@@ -64,8 +64,11 @@ export const Card: React.FC<CardProps> = ({
 
   const webCardStyle = Platform.OS === 'web'
     ? {
-        boxShadow: mode === 'dark' ? '0 4px 20px rgba(0, 0, 0, 0.35)' : '0 4px 12px rgba(0, 0, 0, 0.05)',
-        transition: 'transform 0.15s ease-in-out, box-shadow 0.15s ease-in-out, border-color 0.15s ease-in-out',
+        boxShadow: mode === 'dark'
+          ? '0 4px 20px rgba(0, 0, 0, 0.40)'
+          : '0 4px 14px rgba(0, 0, 0, 0.04)',
+        transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease-in-out',
+        willChange: 'transform, box-shadow',
       }
     : {};
 

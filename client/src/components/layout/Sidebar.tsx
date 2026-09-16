@@ -25,7 +25,7 @@ export const Sidebar: React.FC = () => {
           const isActive = item.id === activeRouteId;
           const webItemStyle = Platform.OS === 'web'
             ? {
-                transition: 'background-color 0.15s ease-in-out, border-color 0.15s ease-in-out',
+                transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
                 cursor: 'pointer',
               }
             : {};
@@ -133,4 +133,3 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
-

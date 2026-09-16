@@ -1,5 +1,6 @@
 /**
  * RIK-RIDE Design System Color Tokens — Amber-Orange & Refined Semantic Approval/Suspend Tokens
+ * Eye-Pleasing Soft Light Mode & Sleek Obsidian Dark Mode Integration
  * 
  * Primary Accent / CTA: #FF7A00 (High-energy, crisp amber-orange)
  * Soft Amber (Readable Text): #FFA347 (Desaturated, lifted lightness for labels & secondary badges)
@@ -100,34 +101,34 @@ export const darkColors: ThemeColors = {
 };
 
 export const lightColors: ThemeColors = {
-  background: '#F8F9FA',       // Modern ultra-clean background
-  surface: '#FFFFFF',          // Pure white surface
-  surfaceElevated: '#F1F3F5',  // Light grey elevated card surface
-  surfaceHover: '#E9ECEF',     // Light grey hover state
-  border: '#E9ECEF',
-  borderSubtle: '#F1F3F5',
-  borderStrong: '#DEE2E6',
+  background: '#FAFAFC',       // Soft off-white linen canvas (eye-pleasing)
+  surface: '#FFFFFF',          // Crisp white surface
+  surfaceElevated: '#F4F4F6',  // Soft elevated grey container
+  surfaceHover: '#EAEAEF',     // Smooth hover fill
+  border: '#E4E4E7',           // Subtle border token
+  borderSubtle: '#F4F4F5',
+  borderStrong: '#D4D4D8',
 
-  textPrimary: '#121316',       // Obsidian primary text
-  textSecondary: '#52535A',     // Carbon grey secondary text
-  textMuted: '#8E8F99',        // Slate grey muted text
+  textPrimary: '#0F172A',       // Deep slate navy-charcoal (comfortably readable)
+  textSecondary: '#475569',     // Slate grey text
+  textMuted: '#94A3B8',        // Soft slate placeholder
 
-  // Primary Orange System
+  // Primary Orange System (#FF7A00)
   primary: '#FF7A00',
-  primaryHover: '#EA580C',
+  primaryHover: '#F97316',
   primaryLight: '#FFA347',
-  primaryDark: '#D96300',
+  primaryDark: '#EA580C',
   primaryMuted: 'rgba(255, 122, 0, 0.08)',
   primaryForeground: '#FFFFFF',
-  primarySurface: 'rgba(255, 122, 0, 0.06)',
-  primaryBorder: 'rgba(255, 122, 0, 0.20)',
+  primarySurface: 'rgba(255, 122, 0, 0.08)',
+  primaryBorder: 'rgba(255, 122, 0, 0.22)',
 
-  accent: '#FF7A00',
-  accentSurface: 'rgba(255, 122, 0, 0.08)',
+  accent: '#FFA347',
+  accentSurface: 'rgba(255, 163, 71, 0.10)',
   accentGlow: 'rgba(255, 122, 0, 0.15)',
 
   cardHeroBg: '#FFF7ED',
-  cardHeroBorder: '#FFEDD5',
+  cardHeroBorder: '#FED7AA',
 
   success: '#059669',          // Muted Green for light mode
   successSurface: 'rgba(5, 150, 105, 0.08)',
@@ -138,6 +139,6 @@ export const lightColors: ThemeColors = {
   info: '#FF7A00',
   infoSurface: 'rgba(255, 122, 0, 0.08)',
 
-  overlay: 'rgba(18, 19, 22, 0.55)',
-  mapBg: '#E9ECEF',
+  overlay: 'rgba(15, 23, 42, 0.50)',
+  mapBg: '#F1F3F5',
 };

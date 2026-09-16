@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { useRouter } from '../../navigation/RouterContext';
 import { useAuth } from '../../context/AuthContext';
@@ -26,13 +26,20 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
     { label: 'Admin', value: 'ADMIN' },
   ];
 
+  const webInteractiveStyle = Platform.OS === 'web'
+    ? {
+        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+        cursor: 'pointer',
+      }
+    : {};
+
   return (
     <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
       <View style={styles.leftSection}>
         {isMobile && (
           <TouchableOpacity
             onPress={onToggleMobileMenu}
-            style={[styles.iconButton, { backgroundColor: colors.surfaceHover }]}
+            style={[styles.iconButton, { backgroundColor: colors.surfaceHover }, webInteractiveStyle as any]}
           >
             <Icon name="grid" size={18} color={colors.textPrimary} />
           </TouchableOpacity>
@@ -61,8 +68,9 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
                   style={[
                     styles.roleChip,
                     {
-                      backgroundColor: isActive ? colors.accentSurface : 'transparent',
+                      backgroundColor: isActive ? colors.primarySurface : 'transparent',
                     },
+                    webInteractiveStyle as any,
                   ]}
                 >
                   <Text
@@ -90,7 +98,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
             )}
             <TouchableOpacity
               onPress={logout}
-              style={[styles.logoutBtn, { backgroundColor: colors.surfaceHover, borderColor: colors.border }]}
+              style={[styles.logoutBtn, { backgroundColor: colors.surfaceHover, borderColor: colors.border }, webInteractiveStyle as any]}
             >
               <Icon name="log-out" size={14} color={colors.danger} />
               <Text style={[styles.logoutText, { color: colors.danger }]}>Sign Out</Text>
@@ -101,7 +109,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
         {/* Theme Toggle Button */}
         <TouchableOpacity
           onPress={toggleTheme}
-          style={[styles.themeToggle, { backgroundColor: colors.surfaceHover, borderColor: colors.border }]}
+          style={[styles.themeToggle, { backgroundColor: colors.surfaceHover, borderColor: colors.border }, webInteractiveStyle as any]}
         >
           <Icon name={mode === 'dark' ? 'sun' : 'moon'} size={14} color={colors.textPrimary} />
           <Text style={[styles.themeToggleText, { color: colors.textPrimary }]}>
@@ -223,4 +231,3 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
   },
 });
-

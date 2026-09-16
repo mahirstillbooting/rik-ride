@@ -38,9 +38,9 @@ export const Button: React.FC<ButtonProps> = ({
   textStyle,
   icon,
 }) => {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
 
-  const getVariantStyles = (): { bg: string; border: string; text: string } => {
+  const getVariantStyles = (): { bg: string; border: string; text: string; shadow?: string } => {
     switch (variant) {
       case 'secondary':
         return {
@@ -65,12 +65,14 @@ export const Button: React.FC<ButtonProps> = ({
           bg: colors.success,
           border: 'transparent',
           text: '#FFFFFF',
+          shadow: '0 4px 14px rgba(16, 185, 129, 0.30)',
         };
       case 'danger':
         return {
           bg: colors.danger,
           border: 'transparent',
           text: '#FFFFFF',
+          shadow: '0 4px 14px rgba(239, 68, 68, 0.30)',
         };
       case 'primary':
       default:
@@ -78,6 +80,9 @@ export const Button: React.FC<ButtonProps> = ({
           bg: colors.primary,
           border: 'transparent',
           text: colors.primaryForeground,
+          shadow: mode === 'dark'
+            ? '0 4px 16px rgba(255, 122, 0, 0.35)'
+            : '0 4px 14px rgba(255, 122, 0, 0.25)',
         };
     }
   };
@@ -94,16 +99,19 @@ export const Button: React.FC<ButtonProps> = ({
     }
   };
 
-  const { bg, border, text } = getVariantStyles();
+  const { bg, border, text, shadow } = getVariantStyles();
   const { py, px, font, height } = getSizePadding();
 
+  // Smooth cubic-bezier hover & press transitions for web platform
   const webButtonStyle = Platform.OS === 'web'
     ? {
         cursor: disabled || loading ? 'not-allowed' : 'pointer',
         outlineStyle: 'none',
         outlineWidth: 0,
         outlineColor: 'transparent',
-        transition: 'background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, opacity 0.15s ease-in-out',
+        boxShadow: shadow || 'none',
+        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+        transform: 'translateZ(0)',
       }
     : {};
 

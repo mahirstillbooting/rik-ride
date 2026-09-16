@@ -6,7 +6,7 @@ import { useTheme } from '../../theme/ThemeContext';
 export type GradientPreset =
   | 'darkHero'
   | 'accentHero'
-  | 'limeHighlight'
+  | 'orangeHighlight'
   | 'cyanHighlight'
   | 'charcoalElevated'
   | 'custom';
@@ -38,9 +38,9 @@ export const GradientView: React.FC<GradientViewProps> = ({
         case 'darkHero':
           return ['#0B0B0E', '#121316'];
         case 'accentHero':
-          return ['#121316', 'rgba(223, 255, 0, 0.12)'];
-        case 'limeHighlight':
-          return ['#DFFF00', '#C0DC00'];
+          return ['#121316', 'rgba(255, 106, 0, 0.12)'];
+        case 'orangeHighlight':
+          return ['#FF6A00', '#D94F00'];
         case 'cyanHighlight':
           return ['#4DD0E1', '#00838F'];
         case 'charcoalElevated':
@@ -51,9 +51,9 @@ export const GradientView: React.FC<GradientViewProps> = ({
       switch (preset) {
         case 'darkHero':
         case 'accentHero':
-          return ['#F8F9FA', '#FFFFFF'];
-        case 'limeHighlight':
-          return ['#121316', '#202127'];
+          return ['#FFF7ED', '#FFFFFF'];
+        case 'orangeHighlight':
+          return ['#FF6A00', '#D94F00'];
         case 'cyanHighlight':
           return ['#00838F', '#006064'];
         case 'charcoalElevated':

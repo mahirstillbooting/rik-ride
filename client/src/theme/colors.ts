@@ -1,13 +1,7 @@
 /**
- * RIK-RIDE Design System Color Tokens — Cyber Obsidian / Electric Acid Lime / Tech Cyan Edition
- * Vercel-Inspired Sleek Aesthetics with Vercel Geist Typography Integration
- * 
- * Base Background: Deepest Obsidian / Charcoal Black (#0B0B0E)
- * Card / Surface Fill: Elevated Dark Zinc (#121316 / #18191E)
- * Hairline Borders: Ultra-subtle (rgba(255,255,255,0.08) / #23252B)
- * Primary Accent: Electric Acid Lime / Cyber Yellow (#DFFF00)
- * Secondary Accent: Tech Cyan / Ice Blue (#4DD0E1)
- * Muted / Alert Accent: Dark Orange / Coral (#FF5722)
+ * RIK-RIDE Design System Color Tokens — Cyber Obsidian & Vibrant Orange Edition
+ * Unified Identity: Deep Obsidian / Charcoal Black / Neutral Greys / Soft White / Vibrant Orange (#FF6A00)
+ * ABSOLUTE RULE: ZERO GREEN OR GREEN-ADJACENT ACCENTS IN EITHER DARK OR LIGHT THEME.
  */
 
 export interface ThemeColors {
@@ -23,7 +17,7 @@ export interface ThemeColors {
   textSecondary: string;
   textMuted: string;
   
-  // Primary Acid Lime Brand System Tokens
+  // Primary Orange Brand System Tokens (#FF6A00)
   primary: string;
   primaryHover: string;
   primaryLight: string;
@@ -68,15 +62,15 @@ export const darkColors: ThemeColors = {
   textSecondary: '#8E8F99',    // Slate Gray
   textMuted: '#52535A',        // Deep Carbon Gray
 
-  // Primary Electric Acid Lime / Cyber Yellow (#DFFF00)
-  primary: '#DFFF00',
-  primaryHover: '#E2F84A',
-  primaryLight: '#E9FA73',
-  primaryDark: '#C0DC00',
-  primaryMuted: 'rgba(223, 255, 0, 0.14)',
-  primaryForeground: '#000000', // Pitch-black text on Acid Lime
-  primarySurface: 'rgba(223, 255, 0, 0.10)',
-  primaryBorder: 'rgba(223, 255, 0, 0.30)',
+  // Primary Vibrant Orange System (#FF6A00)
+  primary: '#FF6A00',
+  primaryHover: '#FF7A1A',
+  primaryLight: '#FF8A3D',
+  primaryDark: '#D94F00',
+  primaryMuted: 'rgba(255, 106, 0, 0.14)',
+  primaryForeground: '#FFFFFF', // Crisp White text on Vibrant Orange
+  primarySurface: 'rgba(255, 106, 0, 0.10)',
+  primaryBorder: 'rgba(255, 106, 0, 0.30)',
 
   // Secondary Tech Cyan / Ice Blue (#4DD0E1)
   accent: '#4DD0E1',
@@ -84,7 +78,7 @@ export const darkColors: ThemeColors = {
   accentGlow: 'rgba(77, 208, 225, 0.20)',
 
   cardHeroBg: '#16171C',
-  cardHeroBorder: 'rgba(223, 255, 0, 0.25)',
+  cardHeroBorder: 'rgba(255, 106, 0, 0.30)',
 
   // Semantic Status Tokens (ZERO GREEN — Neutral Slate, Dark Gray & Subtle Orange)
   success: '#FF7043',          // Subtle Warm Orange active state
@@ -93,8 +87,8 @@ export const darkColors: ThemeColors = {
   warningSurface: 'rgba(255, 87, 34, 0.12)',
   danger: '#FF5722',           // Dark Orange / Coral destructive action
   dangerSurface: 'rgba(255, 87, 34, 0.12)',
-  info: '#4DD0E1',             // Tech Cyan Info
-  infoSurface: 'rgba(77, 208, 225, 0.12)',
+  info: '#FF6A00',             // Info matches Brand Orange
+  infoSurface: 'rgba(255, 106, 0, 0.12)',
 
   overlay: 'rgba(11, 11, 14, 0.88)',
   mapBg: '#090A0C',
@@ -113,22 +107,22 @@ export const lightColors: ThemeColors = {
   textSecondary: '#52535A',     // Carbon grey secondary text
   textMuted: '#8E8F99',        // Slate grey muted text
 
-  // Primary Acid Lime System
-  primary: '#121316',          // In light mode, crisp obsidian primary text/button background
-  primaryHover: '#202127',
-  primaryLight: '#2B2C33',
-  primaryDark: '#0B0B0E',
-  primaryMuted: 'rgba(18, 19, 22, 0.08)',
-  primaryForeground: '#DFFF00', // Acid Lime text on black button in light mode
-  primarySurface: 'rgba(18, 19, 22, 0.05)',
-  primaryBorder: 'rgba(18, 19, 22, 0.20)',
+  // Primary Orange System
+  primary: '#FF6A00',
+  primaryHover: '#EA580C',
+  primaryLight: '#FF8A3D',
+  primaryDark: '#D94F00',
+  primaryMuted: 'rgba(255, 106, 0, 0.10)',
+  primaryForeground: '#FFFFFF',
+  primarySurface: 'rgba(255, 106, 0, 0.08)',
+  primaryBorder: 'rgba(255, 106, 0, 0.26)',
 
-  accent: '#00838F',           // Darker Cyan for light mode readability
-  accentSurface: 'rgba(0, 131, 143, 0.08)',
-  accentGlow: 'rgba(0, 131, 143, 0.15)',
+  accent: '#FF6A00',
+  accentSurface: 'rgba(255, 106, 0, 0.08)',
+  accentGlow: 'rgba(255, 106, 0, 0.15)',
 
-  cardHeroBg: '#F1F3F5',
-  cardHeroBorder: '#DEE2E6',
+  cardHeroBg: '#FFF7ED',
+  cardHeroBorder: '#FFEDD5',
 
   success: '#E64A19',
   successSurface: 'rgba(230, 74, 25, 0.08)',
@@ -136,8 +130,8 @@ export const lightColors: ThemeColors = {
   warningSurface: 'rgba(230, 74, 25, 0.08)',
   danger: '#E64A19',
   dangerSurface: 'rgba(230, 74, 25, 0.08)',
-  info: '#00838F',
-  infoSurface: 'rgba(0, 131, 143, 0.08)',
+  info: '#FF6A00',
+  infoSurface: 'rgba(255, 106, 0, 0.08)',
 
   overlay: 'rgba(18, 19, 22, 0.55)',
   mapBg: '#E9ECEF',

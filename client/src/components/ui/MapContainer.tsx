@@ -7,11 +7,13 @@ import {
   StyleProp,
   ViewStyle,
   DimensionValue,
+  Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { borderRadius, spacing } from '../../theme/spacing';
 import { Icon } from './Icon';
 import { Badge } from './Badge';
+import { RealMapContainer } from './RealMapContainer';
 
 export interface RickshawMarker {
   id: string;
@@ -29,6 +31,10 @@ export interface MapContainerProps {
   markers?: RickshawMarker[];
   showRoute?: boolean;
   style?: StyleProp<ViewStyle>;
+  latitude?: number;
+  longitude?: number;
+  accuracy?: number;
+  status?: string;
 }
 
 export const MapContainer: React.FC<MapContainerProps> = ({
@@ -38,9 +44,28 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   markers: propMarkers,
   showRoute = true,
   style,
+  latitude,
+  longitude,
+  accuracy,
+  status,
 }) => {
   const { colors, mode } = useTheme();
   const [selectedMarker, setSelectedMarker] = useState<RickshawMarker | null>(null);
+
+  // If running on web, delegate map rendering to RealMapContainer for real Leaflet geographic map
+  if (Platform.OS === 'web') {
+    return (
+      <RealMapContainer
+        height={height}
+        title={title}
+        subtitle={subtitle}
+        latitude={latitude ?? (propMarkers && propMarkers[0] ? propMarkers[0].lat : 23.8103)}
+        longitude={longitude ?? (propMarkers && propMarkers[0] ? propMarkers[0].lng : 90.4125)}
+        accuracy={accuracy}
+        status={status || 'LOCATION_ACTIVE'}
+      />
+    );
+  }
 
   // Default sample active rickshaws in Dhaka
   const markers: RickshawMarker[] = propMarkers || [

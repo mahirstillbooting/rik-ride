@@ -20,6 +20,7 @@ import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
 import { Icon } from '../components/ui/Icon';
+import { RealMapContainer } from '../components/ui/RealMapContainer';
 import { spacing, borderRadius } from '../theme/spacing';
 import {
   driverService,
@@ -601,6 +602,23 @@ export const DriverDashboardView: React.FC = () => {
               </View>
             </View>
           )}
+
+          {/* Real Interactive Leaflet Geographic Map */}
+          <View style={{ marginTop: spacing.xs }}>
+            <RealMapContainer
+              latitude={currentLoc?.latitude ?? 23.8103}
+              longitude={currentLoc?.longitude ?? 90.4125}
+              accuracy={currentLoc?.accuracy}
+              status={sharingStatus}
+              title="Real Interactive Device GPS Map"
+              subtitle={
+                isSharing
+                  ? `Live Telemetry via ${currentLoc?.source || 'DEVICE_GPS'} • Synchronized`
+                  : 'Location Sharing Inactive — Tap "Start Live Location Sharing" to stream live GPS'
+              }
+              height={360}
+            />
+          </View>
 
           {/* Dev Location Simulator Panel */}
           {showSimPanel && (

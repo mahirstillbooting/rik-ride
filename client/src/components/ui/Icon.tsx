@@ -88,6 +88,13 @@ export const Icon: React.FC<IconProps> = ({ name, size = 18, color, style }) => 
     case 'clock':
     case 'map-pin':
     case 'plus':
+    case 'minus':
+    case 'maximize':
+    case 'maximize-2':
+    case 'minimize':
+    case 'minimize-2':
+    case 'crosshair':
+    case 'target':
     case 'chevron-right':
     case 'chevron-left':
     case 'chevron-down':

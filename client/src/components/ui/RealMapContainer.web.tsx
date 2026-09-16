@@ -18,9 +18,9 @@ export interface RealMapContainerProps {
 }
 
 export const RealMapContainer: React.FC<RealMapContainerProps> = ({
-  latitude = 23.8103, // Default Dhaka fallback
-  longitude = 90.4125,
-  accuracy,
+  latitude: propLat,
+  longitude: propLng,
+  accuracy: propAccuracy,
   status = 'LOCATION_ACTIVE',
   title = 'Real-Time GeoTelemetry Engine',
   subtitle = 'Device GPS Synchronized',
@@ -29,7 +29,20 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
 }) => {
   const { colors, mode } = useTheme();
 
-  // Embedded Preview Map References & State
+  // Admin PC / Device Live Location State
+  const [deviceCoords, setDeviceCoords] = useState<{
+    lat: number;
+    lng: number;
+    accuracy?: number;
+    source: string;
+  }>({
+    lat: propLat ?? 23.8103, // Default fallback if no GPS
+    lng: propLng ?? 90.4125,
+    accuracy: propAccuracy,
+    source: propLat ? 'TELEMETRY' : 'INITIALIZING',
+  });
+
+  // Embedded Map References & State
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
@@ -51,7 +64,43 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   const modalAccuracyCircleRef = useRef<any>(null);
   const modalTileLayerRef = useRef<any>(null);
 
-  // Inject Leaflet & Modal CSS animations dynamically on web
+  // -------------------------------------------------------------
+  // 1. ACQUIRE ACTUAL ADMIN PC LIVE GPS LOCATION
+  // -------------------------------------------------------------
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    // Request actual Admin PC browser geolocation
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        setDeviceCoords({
+          lat: latitude,
+          lng: longitude,
+          accuracy: accuracy || undefined,
+          source: 'ADMIN_PC_LIVE_GPS',
+        });
+      },
+      (err) => {
+        console.warn('Browser GPS notification:', err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 }
+    );
+  }, []);
+
+  // Update coords if props explicitly change from parent
+  useEffect(() => {
+    if (propLat !== undefined && propLng !== undefined) {
+      setDeviceCoords({
+        lat: propLat,
+        lng: propLng,
+        accuracy: propAccuracy,
+        source: 'TELEMETRY',
+      });
+    }
+  }, [propLat, propLng, propAccuracy]);
+
+  // Inject Leaflet & High-Visibility Dark Mode CSS animations
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
 
@@ -87,6 +136,10 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         }
         .rik-map-clickable {
           cursor: pointer;
+        }
+        /* Sleek High-Visibility Dark Tile Filter for OpenStreetMap (Bright crisp text labels) */
+        .rik-dark-tile-layer {
+          filter: brightness(0.85) contrast(1.15) invert(0.92) hue-rotate(185deg) saturate(0.75) !important;
         }
       `;
       document.head.appendChild(styleEl);
@@ -131,7 +184,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   }, [isModalOpen]);
 
   // -------------------------------------------------------------
-  // 1. EMBEDDED MAP INITIALIZATION & UPDATES
+  // 2. EMBEDDED MAP INITIALIZATION & UPDATES
   // -------------------------------------------------------------
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined' || !mapContainerRef.current) return;
@@ -147,48 +200,44 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     if (!mapInstanceRef.current) {
       try {
         const map = L.map(mapContainerRef.current, {
-          center: [latitude, longitude],
+          center: [deviceCoords.lat, deviceCoords.lng],
           zoom: 15,
           zoomControl: false,
           attributionControl: false,
         });
 
-        // Genuine free tile provider configuration (CartoDB Dark Matter / Voyager without retina key requirement)
-        const tileUrl =
-          mode === 'dark'
-            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-            : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
-
-        const tileLayer = L.tileLayer(tileUrl, {
+        // 100% Free Public OpenStreetMap Tiles (NO API KEY, NO WATERMARK)
+        const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
-          subdomains: 'abcd',
+          subdomains: 'abc',
+          className: mode === 'dark' ? 'rik-dark-tile-layer' : '',
         }).addTo(map);
 
         L.control
           .attribution({ position: 'bottomright' })
-          .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>')
+          .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors')
           .addTo(map);
 
         const driverIcon = L.divIcon({
           className: 'rik-driver-location-marker',
           html: `
-            <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">
-              <div style="position: absolute; width: 28px; height: 28px; border-radius: 50%; background: rgba(226, 118, 58, 0.28); animation: rikPulse 2s infinite ease-in-out;"></div>
-              <div style="width: 14px; height: 14px; border-radius: 50%; background: #E2763A; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.4);"></div>
+            <div style="position: relative; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">
+              <div style="position: absolute; width: 30px; height: 30px; border-radius: 50%; background: rgba(226, 118, 58, 0.32); animation: rikPulse 2s infinite ease-in-out;"></div>
+              <div style="width: 15px; height: 15px; border-radius: 50%; background: #E2763A; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 10px rgba(0,0,0,0.45);"></div>
             </div>
             <style>
               @keyframes rikPulse {
-                0% { transform: scale(0.8); opacity: 0.8; }
-                50% { transform: scale(1.4); opacity: 0.2; }
-                100% { transform: scale(0.8); opacity: 0.8; }
+                0% { transform: scale(0.8); opacity: 0.85; }
+                50% { transform: scale(1.45); opacity: 0.2; }
+                100% { transform: scale(0.8); opacity: 0.85; }
               }
             </style>
           `,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
         });
 
-        const marker = L.marker([latitude, longitude], { icon: driverIcon }).addTo(map);
+        const marker = L.marker([deviceCoords.lat, deviceCoords.lng], { icon: driverIcon }).addTo(map);
 
         map.on('dragstart', () => {
           setIsUserPanning(true);
@@ -214,31 +263,20 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     };
   }, []);
 
-  // Update embedded map tile layer on theme toggle
+  // Update tile layer dark mode filter on theme toggle
   useEffect(() => {
-    if (!mapInstanceRef.current || Platform.OS !== 'web') return;
-    let L: any;
-    try {
-      L = require('leaflet');
-    } catch {
-      return;
+    if (!mapInstanceRef.current || !tileLayerRef.current || Platform.OS !== 'web') return;
+    const tileContainer = tileLayerRef.current.getContainer();
+    if (tileContainer) {
+      if (mode === 'dark') {
+        tileContainer.classList.add('rik-dark-tile-layer');
+      } else {
+        tileContainer.classList.remove('rik-dark-tile-layer');
+      }
     }
-
-    if (tileLayerRef.current) {
-      mapInstanceRef.current.removeLayer(tileLayerRef.current);
-    }
-
-    const tileUrl =
-      mode === 'dark'
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
-
-    tileLayerRef.current = L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(
-      mapInstanceRef.current
-    );
   }, [mode]);
 
-  // Update embedded marker position & accuracy circle
+  // Update embedded marker position & accuracy circle when deviceCoords changes
   useEffect(() => {
     if (!mapInstanceRef.current || !markerRef.current || Platform.OS !== 'web') return;
     let L: any;
@@ -248,20 +286,20 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
       return;
     }
 
-    const newPos: [number, number] = [latitude, longitude];
+    const newPos: [number, number] = [deviceCoords.lat, deviceCoords.lng];
     markerRef.current.setLatLng(newPos);
 
-    if (accuracy && accuracy > 0) {
+    if (deviceCoords.accuracy && deviceCoords.accuracy > 0) {
       if (accuracyCircleRef.current) {
         accuracyCircleRef.current.setLatLng(newPos);
-        accuracyCircleRef.current.setRadius(accuracy);
+        accuracyCircleRef.current.setRadius(deviceCoords.accuracy);
       } else {
         accuracyCircleRef.current = L.circle(newPos, {
-          radius: accuracy,
+          radius: deviceCoords.accuracy,
           color: '#E2763A',
           fillColor: '#E2763A',
-          fillOpacity: 0.08,
-          weight: 1,
+          fillOpacity: 0.10,
+          weight: 1.5,
         }).addTo(mapInstanceRef.current);
       }
     }
@@ -269,13 +307,13 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     if (!isUserPanning) {
       mapInstanceRef.current.panTo(newPos, { animate: true, duration: 0.8 });
     }
-  }, [latitude, longitude, accuracy, isUserPanning]);
+  }, [deviceCoords, isUserPanning]);
 
   // Embedded map controls
   const handleRecenter = () => {
     if (mapInstanceRef.current) {
       setIsUserPanning(false);
-      mapInstanceRef.current.setView([latitude, longitude], 16, { animate: true });
+      mapInstanceRef.current.setView([deviceCoords.lat, deviceCoords.lng], 16, { animate: true });
     }
   };
 
@@ -288,7 +326,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   };
 
   // -------------------------------------------------------------
-  // 2. EXPANDED FULLSCREEN MODAL MAP INITIALIZATION & UPDATES
+  // 3. EXPANDED FULLSCREEN MODAL MAP INITIALIZATION & UPDATES
   // -------------------------------------------------------------
   useEffect(() => {
     if (!isModalOpen || Platform.OS !== 'web' || typeof window === 'undefined' || !modalMapContainerRef.current) return;
@@ -303,37 +341,37 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     if (!modalMapInstanceRef.current) {
       try {
         const map = L.map(modalMapContainerRef.current, {
-          center: [latitude, longitude],
+          center: [deviceCoords.lat, deviceCoords.lng],
           zoom: 16,
           zoomControl: false,
           attributionControl: false,
         });
 
-        const tileUrl =
-          mode === 'dark'
-            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-            : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
-
-        const tileLayer = L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(map);
+        // 100% Free Public OpenStreetMap Tiles (NO API KEY, NO WATERMARK)
+        const tileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          subdomains: 'abc',
+          className: mode === 'dark' ? 'rik-dark-tile-layer' : '',
+        }).addTo(map);
 
         L.control
           .attribution({ position: 'bottomright' })
-          .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>')
+          .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors')
           .addTo(map);
 
         const driverIcon = L.divIcon({
           className: 'rik-driver-location-marker-modal',
           html: `
-            <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
-              <div style="position: absolute; width: 34px; height: 34px; border-radius: 50%; background: rgba(226, 118, 58, 0.30); animation: rikPulse 2s infinite ease-in-out;"></div>
-              <div style="width: 16px; height: 16px; border-radius: 50%; background: #E2763A; border: 2.5px solid #FFFFFF; box-shadow: 0 3px 12px rgba(0,0,0,0.5);"></div>
+            <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;">
+              <div style="position: absolute; width: 36px; height: 36px; border-radius: 50%; background: rgba(226, 118, 58, 0.32); animation: rikPulse 2s infinite ease-in-out;"></div>
+              <div style="width: 17px; height: 17px; border-radius: 50%; background: #E2763A; border: 2.5px solid #FFFFFF; box-shadow: 0 3px 12px rgba(0,0,0,0.5);"></div>
             </div>
           `,
-          iconSize: [34, 34],
-          iconAnchor: [17, 17],
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
         });
 
-        const marker = L.marker([latitude, longitude], { icon: driverIcon }).addTo(map);
+        const marker = L.marker([deviceCoords.lat, deviceCoords.lng], { icon: driverIcon }).addTo(map);
 
         map.on('dragstart', () => {
           setIsModalUserPanning(true);
@@ -365,28 +403,17 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     };
   }, [isModalOpen]);
 
-  // Update modal tile layer on theme mode change
+  // Update modal tile layer dark mode filter on theme toggle
   useEffect(() => {
-    if (!modalMapInstanceRef.current || Platform.OS !== 'web') return;
-    let L: any;
-    try {
-      L = require('leaflet');
-    } catch {
-      return;
+    if (!modalMapInstanceRef.current || !modalTileLayerRef.current || Platform.OS !== 'web') return;
+    const tileContainer = modalTileLayerRef.current.getContainer();
+    if (tileContainer) {
+      if (mode === 'dark') {
+        tileContainer.classList.add('rik-dark-tile-layer');
+      } else {
+        tileContainer.classList.remove('rik-dark-tile-layer');
+      }
     }
-
-    if (modalTileLayerRef.current) {
-      modalMapInstanceRef.current.removeLayer(modalTileLayerRef.current);
-    }
-
-    const tileUrl =
-      mode === 'dark'
-        ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png'
-        : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png';
-
-    modalTileLayerRef.current = L.tileLayer(tileUrl, { maxZoom: 19, subdomains: 'abcd' }).addTo(
-      modalMapInstanceRef.current
-    );
   }, [mode]);
 
   // Update modal marker position & accuracy circle
@@ -399,20 +426,20 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
       return;
     }
 
-    const newPos: [number, number] = [latitude, longitude];
+    const newPos: [number, number] = [deviceCoords.lat, deviceCoords.lng];
     modalMarkerRef.current.setLatLng(newPos);
 
-    if (accuracy && accuracy > 0) {
+    if (deviceCoords.accuracy && deviceCoords.accuracy > 0) {
       if (modalAccuracyCircleRef.current) {
         modalAccuracyCircleRef.current.setLatLng(newPos);
-        modalAccuracyCircleRef.current.setRadius(accuracy);
+        modalAccuracyCircleRef.current.setRadius(deviceCoords.accuracy);
       } else {
         modalAccuracyCircleRef.current = L.circle(newPos, {
-          radius: accuracy,
+          radius: deviceCoords.accuracy,
           color: '#E2763A',
           fillColor: '#E2763A',
-          fillOpacity: 0.08,
-          weight: 1,
+          fillOpacity: 0.10,
+          weight: 1.5,
         }).addTo(modalMapInstanceRef.current);
       }
     }
@@ -420,13 +447,13 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     if (!isModalUserPanning) {
       modalMapInstanceRef.current.panTo(newPos, { animate: true, duration: 0.8 });
     }
-  }, [latitude, longitude, accuracy, isModalUserPanning]);
+  }, [deviceCoords, isModalUserPanning]);
 
   // Modal map control handlers
   const handleModalRecenter = () => {
     if (modalMapInstanceRef.current) {
       setIsModalUserPanning(false);
-      modalMapInstanceRef.current.setView([latitude, longitude], 16, { animate: true });
+      modalMapInstanceRef.current.setView([deviceCoords.lat, deviceCoords.lng], 16, { animate: true });
     }
   };
 
@@ -469,14 +496,17 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         </View>
 
         <View style={styles.badgeGroup}>
-          <Badge label={status.replace('_', ' ')} variant={status === 'LOCATION_ACTIVE' ? 'success' : 'warning'} />
+          <Badge
+            label={deviceCoords.source === 'ADMIN_PC_LIVE_GPS' ? 'LIVE PC GPS' : status.replace('_', ' ')}
+            variant={status === 'LOCATION_ACTIVE' || deviceCoords.source === 'ADMIN_PC_LIVE_GPS' ? 'success' : 'warning'}
+          />
 
           {allowExpand && (
             <TouchableOpacity
               style={[styles.expandHeaderBtn, { backgroundColor: colors.primarySurface, borderColor: colors.primaryBorder }]}
               onPress={handleOpenModal}
             >
-              <Icon name="maximize-2" size={12} color={colors.primary} />
+              <Icon name="maximize-2" size={13} color={colors.primary} />
               <Text style={[styles.expandHeaderBtnText, { color: colors.primary }]}>Expand Map</Text>
             </TouchableOpacity>
           )}
@@ -540,12 +570,13 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
       {/* Embedded Map Footer Banner */}
       <View style={[styles.mapFooterBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.borderSubtle }]}>
         <Text style={[styles.footerText, { color: colors.textSecondary }]}>
-          Current Position: <Text style={{ color: colors.primary, fontWeight: '700' }}>{latitude.toFixed(5)}°, {longitude.toFixed(5)}°</Text>
-          {accuracy ? ` • Accuracy: ±${accuracy.toFixed(1)}m` : ''}
+          {deviceCoords.source === 'ADMIN_PC_LIVE_GPS' ? 'Admin PC Location' : 'Current Position'}:{' '}
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>{deviceCoords.lat.toFixed(5)}°, {deviceCoords.lng.toFixed(5)}°</Text>
+          {deviceCoords.accuracy ? ` • Accuracy: ±${deviceCoords.accuracy.toFixed(1)}m` : ''}
         </Text>
         {allowExpand ? (
           <TouchableOpacity onPress={handleOpenModal}>
-            <Text style={[styles.recenterLink, { color: colors.primary }]}>Click to Expand Fullscreen Map ↗</Text>
+            <Text style={[styles.recenterLink, { color: colors.primary }]}>Fullscreen Map ↗</Text>
           </TouchableOpacity>
         ) : (
           isUserPanning && (
@@ -557,7 +588,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
       </View>
 
       {/* ------------------------------------------------------------- */}
-      {/* 3. FULLSCREEN COMMAND-CENTER MAP MODAL (SAME PAGE OVERLAY)     */}
+      {/* 4. FULLSCREEN COMMAND-CENTER MAP MODAL (SAME PAGE OVERLAY)     */}
       {/* ------------------------------------------------------------- */}
       {isModalOpen && Platform.OS === 'web' && (
         <div
@@ -568,8 +599,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(8, 9, 10, 0.78)',
-            backdropFilter: 'blur(3px)',
+            backgroundColor: 'rgba(8, 9, 10, 0.82)',
+            backdropFilter: 'blur(4px)',
             zIndex: 99999,
             display: 'flex',
             alignItems: 'center',
@@ -591,7 +622,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.80)',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.85)',
               animation: isModalClosing
                 ? 'rikModalExpandOut 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards'
                 : 'rikModalExpandIn 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
@@ -694,11 +725,14 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
               }}
             >
               <div>
-                Current Telemetry Position:{' '}
+                {deviceCoords.source === 'ADMIN_PC_LIVE_GPS' ? 'Admin PC Live Location' : 'Current Telemetry Position'}:{' '}
                 <strong style={{ color: colors.primary }}>
-                  {latitude.toFixed(5)}°, {longitude.toFixed(5)}°
+                  {deviceCoords.lat.toFixed(5)}°, {deviceCoords.lng.toFixed(5)}°
                 </strong>
-                {accuracy ? ` • Accuracy: ±${accuracy.toFixed(1)}m` : ''} • Status: <span style={{ color: colors.success, fontWeight: '700' }}>{status}</span>
+                {deviceCoords.accuracy ? ` • Accuracy: ±${deviceCoords.accuracy.toFixed(1)}m` : ''} • Stream Status:{' '}
+                <span style={{ color: colors.success, fontWeight: '700' }}>
+                  {deviceCoords.source === 'ADMIN_PC_LIVE_GPS' ? 'LIVE_PC_GPS' : status}
+                </span>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>

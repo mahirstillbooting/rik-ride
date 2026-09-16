@@ -33,8 +33,24 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
       }
     : {};
 
+  const webHeaderGlassStyle = Platform.OS === 'web'
+    ? {
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+      }
+    : {};
+
   return (
-    <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+    <View
+      style={[
+        styles.header,
+        {
+          backgroundColor: colors.overlay,
+          borderBottomColor: colors.border,
+        },
+        webHeaderGlassStyle as any,
+      ]}
+    >
       <View style={styles.leftSection}>
         {isMobile && (
           <TouchableOpacity
@@ -55,10 +71,10 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
       </View>
 
       <View style={styles.rightSection}>
-        {/* Role Selector Preview */}
+        {/* Role Selector Pill Dock (shadcn/ui style) */}
         {!isMobile && (
-          <View style={[styles.rolePickerContainer, { backgroundColor: colors.background, borderColor: colors.border }]}>
-            <Text style={[styles.roleLabel, { color: colors.textMuted }]}>Role Mode:</Text>
+          <View style={[styles.rolePickerContainer, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+            <Text style={[styles.roleLabel, { color: colors.textMuted }]}>Mode:</Text>
             {roleOptions.map((opt) => {
               const isActive = activeRole === opt.value;
               return (
@@ -68,7 +84,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
                   style={[
                     styles.roleChip,
                     {
-                      backgroundColor: isActive ? colors.primarySurface : 'transparent',
+                      backgroundColor: isActive ? colors.primary : 'transparent',
                     },
                     webInteractiveStyle as any,
                   ]}
@@ -76,7 +92,10 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
                   <Text
                     style={[
                       styles.roleChipText,
-                      { color: isActive ? colors.primary : colors.textSecondary, fontWeight: isActive ? '700' : '500' },
+                      {
+                        color: isActive ? colors.primaryForeground : colors.textSecondary,
+                        fontWeight: isActive ? '700' : '500',
+                      },
                     ]}
                   >
                     {opt.label}
@@ -106,12 +125,12 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
           </View>
         )}
 
-        {/* Theme Toggle Button */}
+        {/* Theme Toggle Button Pill */}
         <TouchableOpacity
           onPress={toggleTheme}
-          style={[styles.themeToggle, { backgroundColor: colors.surfaceHover, borderColor: colors.border }, webInteractiveStyle as any]}
+          style={[styles.themeToggle, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }, webInteractiveStyle as any]}
         >
-          <Icon name={mode === 'dark' ? 'sun' : 'moon'} size={14} color={colors.textPrimary} />
+          <Icon name={mode === 'dark' ? 'sun' : 'moon'} size={14} color={colors.primary} />
           <Text style={[styles.themeToggleText, { color: colors.textPrimary }]}>
             {mode === 'dark' ? 'Light' : 'Dark'}
           </Text>
@@ -123,7 +142,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
 
 const styles = StyleSheet.create({
   header: {
-    height: 60,
+    height: 62,
     paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
@@ -167,22 +186,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 3,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
     gap: 2,
   },
   roleLabel: {
     fontSize: 11,
     fontWeight: '600',
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
   },
   roleChip: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: borderRadius.sm,
+    borderRadius: borderRadius.full,
   },
   roleChipText: {
-    fontSize: 12,
+    fontSize: 11,
   },
   userSection: {
     flexDirection: 'row',
@@ -206,7 +225,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
   },
   logoutText: {
@@ -217,14 +236,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 1,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
   },
   themeToggleText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   iconButton: {
     padding: spacing.xs,

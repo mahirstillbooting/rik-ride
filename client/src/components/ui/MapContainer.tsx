@@ -39,7 +39,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   showRoute = true,
   style,
 }) => {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const [selectedMarker, setSelectedMarker] = useState<RickshawMarker | null>(null);
 
   // Default sample active rickshaws in Dhaka
@@ -73,14 +73,22 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 
         <View style={styles.badgeGroup}>
           <Badge label="Device GPS" variant="info" />
-          <Badge label="Hardware Independent" variant="neutral" />
+          <Badge label={mode === 'dark' ? 'Dark Map' : 'Light Map'} variant="neutral" />
         </View>
       </View>
 
       {/* Map Canvas Presentation */}
       <View style={styles.canvasContainer}>
-        {/* Dark Grid Background Effect */}
-        <View style={[styles.gridPattern, { borderColor: colors.borderSubtle }]} />
+        {/* Dynamic Grid Overlay Effect */}
+        <View
+          style={[
+            styles.gridPattern,
+            {
+              borderColor: colors.borderSubtle,
+              backgroundColor: mode === 'dark' ? 'rgba(0,0,0,0.20)' : 'rgba(255,255,255,0.40)',
+            },
+          ]}
+        />
 
         {/* Route Path Indicator Line */}
         {showRoute && (
@@ -165,7 +173,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
 const styles = StyleSheet.create({
   mapCard: {
     width: '100%',
-    borderRadius: borderRadius.lg,
+    borderRadius: borderRadius.xl,
     borderWidth: 1,
     overflow: 'hidden',
     position: 'relative',
@@ -295,7 +303,7 @@ const styles = StyleSheet.create({
     right: spacing.md,
     bottom: spacing.md,
     padding: spacing.md,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
     zIndex: 20,
   },

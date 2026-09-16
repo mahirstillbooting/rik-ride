@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { borderRadius, spacing } from '../../theme/spacing';
+import { spacing } from '../../theme/spacing';
 
 export interface InputProps extends TextInputProps {
   label?: string;
@@ -33,11 +33,10 @@ export const Input: React.FC<InputProps> = ({
   onBlur,
   ...props
 }) => {
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
 
   // Eliminate web browser focus ring / outline / shadow completely
-  // Ensures ONE single visual container with NO outer focus rectangle
   const webInputStyle = Platform.OS === 'web'
     ? ({
         outlineStyle: 'none',
@@ -52,8 +51,12 @@ export const Input: React.FC<InputProps> = ({
         outlineStyle: 'none',
         outlineWidth: 0,
         outlineColor: 'transparent',
-        boxShadow: 'none',
-        transition: 'border-color 0.15s ease-in-out, background-color 0.15s ease-in-out',
+        boxShadow: isFocused
+          ? mode === 'dark'
+            ? '0 0 0 3px rgba(255, 122, 0, 0.20)'
+            : '0 0 0 3px rgba(255, 122, 0, 0.15)'
+          : 'none',
+        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
       } as any)
     : {};
 
@@ -67,7 +70,7 @@ export const Input: React.FC<InputProps> = ({
         style={[
           styles.inputWrapper,
           {
-            backgroundColor: colors.surface,
+            backgroundColor: colors.surfaceElevated,
             borderColor: error
               ? colors.danger
               : isFocused
@@ -118,15 +121,15 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '600',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xs + 2,
     letterSpacing: 0.2,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: borderRadius.md,
+    borderRadius: 14,
     paddingHorizontal: spacing.md,
-    height: 44,
+    height: 46,
   },
   input: {
     flex: 1,

@@ -1,21 +1,28 @@
 /**
- * RIK-RIDE Typography System
- * Centralized typography scales, line heights, letter spacing, font weights,
- * and text-wrapping helpers to ensure clean rendering across Web, Android, and Desktop.
+ * RIK-RIDE Typography System — Vercel Geist Edition
+ * Featuring Vercel's Geist Sans & Geist Mono fonts with system fallback stack
  */
 
 import { TextStyle, Platform } from 'react-native';
 
-const systemFontFamily = Platform.select({
-  web: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  android: 'Roboto',
+const geistSansFamily = Platform.select({
+  web: '"Geist", "Geist Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  android: 'sans-serif',
   ios: 'System',
-  default: 'System',
+  default: 'sans-serif',
+});
+
+const geistMonoFamily = Platform.select({
+  web: '"Geist Mono", "GeistMono", "ui-monospace", "SFMono-Regular", "Roboto Mono", monospace',
+  android: 'monospace',
+  ios: 'Courier',
+  default: 'monospace',
 });
 
 export const typography = {
-  // Font Family
-  fontFamily: systemFontFamily,
+  // Font Families
+  fontFamily: geistSansFamily,
+  fontFamilyMono: geistMonoFamily,
 
   // Font Sizes
   sizes: {
@@ -50,7 +57,7 @@ export const typography = {
   // Preset Typography Styles
   styles: {
     display: {
-      fontFamily: systemFontFamily,
+      fontFamily: geistSansFamily,
       fontSize: 28,
       fontWeight: '800' as TextStyle['fontWeight'],
       lineHeight: 34,
@@ -58,7 +65,7 @@ export const typography = {
     } as TextStyle,
 
     pageTitle: {
-      fontFamily: systemFontFamily,
+      fontFamily: geistSansFamily,
       fontSize: 22,
       fontWeight: '800' as TextStyle['fontWeight'],
       lineHeight: 28,
@@ -66,7 +73,7 @@ export const typography = {
     } as TextStyle,
 
     sectionTitle: {
-      fontFamily: systemFontFamily,
+      fontFamily: geistSansFamily,
       fontSize: 18,
       fontWeight: '700' as TextStyle['fontWeight'],
       lineHeight: 24,
@@ -74,7 +81,7 @@ export const typography = {
     } as TextStyle,
 
     cardTitle: {
-      fontFamily: systemFontFamily,
+      fontFamily: geistSansFamily,
       fontSize: 15,
       fontWeight: '700' as TextStyle['fontWeight'],
       lineHeight: 20,
@@ -82,21 +89,21 @@ export const typography = {
     } as TextStyle,
 
     body: {
-      fontFamily: systemFontFamily,
+      fontFamily: geistSansFamily,
       fontSize: 14,
       fontWeight: '400' as TextStyle['fontWeight'],
       lineHeight: 20,
     } as TextStyle,
 
     secondaryBody: {
-      fontFamily: systemFontFamily,
+      fontFamily: geistSansFamily,
       fontSize: 13,
       fontWeight: '400' as TextStyle['fontWeight'],
       lineHeight: 18,
     } as TextStyle,
 
     caption: {
-      fontFamily: systemFontFamily,
+      fontFamily: geistSansFamily,
       fontSize: 11,
       fontWeight: '500' as TextStyle['fontWeight'],
       lineHeight: 15,
@@ -104,7 +111,7 @@ export const typography = {
     } as TextStyle,
 
     label: {
-      fontFamily: systemFontFamily,
+      fontFamily: geistSansFamily,
       fontSize: 12,
       fontWeight: '600' as TextStyle['fontWeight'],
       lineHeight: 16,
@@ -112,7 +119,7 @@ export const typography = {
     } as TextStyle,
 
     button: {
-      fontFamily: systemFontFamily,
+      fontFamily: geistSansFamily,
       fontSize: 14,
       fontWeight: '600' as TextStyle['fontWeight'],
       lineHeight: 18,
@@ -120,11 +127,18 @@ export const typography = {
     } as TextStyle,
 
     metric: {
-      fontFamily: systemFontFamily,
+      fontFamily: geistMonoFamily,
       fontSize: 32,
       fontWeight: '800' as TextStyle['fontWeight'],
       lineHeight: 38,
       letterSpacing: -0.8,
+    } as TextStyle,
+
+    mono: {
+      fontFamily: geistMonoFamily,
+      fontSize: 13,
+      fontWeight: '400' as TextStyle['fontWeight'],
+      lineHeight: 18,
     } as TextStyle,
   },
 };

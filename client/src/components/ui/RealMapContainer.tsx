@@ -13,6 +13,7 @@ export interface RealMapContainerProps {
   subtitle?: string;
   height?: number | string;
   onRecenter?: () => void;
+  allowExpand?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 

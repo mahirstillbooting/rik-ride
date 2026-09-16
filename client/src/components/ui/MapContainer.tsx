@@ -35,6 +35,7 @@ export interface MapContainerProps {
   longitude?: number;
   accuracy?: number;
   status?: string;
+  allowExpand?: boolean;
 }
 
 export const MapContainer: React.FC<MapContainerProps> = ({
@@ -48,6 +49,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   longitude,
   accuracy,
   status,
+  allowExpand = true,
 }) => {
   const { colors, mode } = useTheme();
   const [selectedMarker, setSelectedMarker] = useState<RickshawMarker | null>(null);
@@ -63,6 +65,7 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         longitude={longitude ?? (propMarkers && propMarkers[0] ? propMarkers[0].lng : 90.4125)}
         accuracy={accuracy}
         status={status || 'LOCATION_ACTIVE'}
+        allowExpand={allowExpand}
       />
     );
   }

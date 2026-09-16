@@ -40,14 +40,14 @@ export const Button: React.FC<ButtonProps> = ({
   textStyle,
   icon,
 }) => {
-  const { colors, mode } = useTheme();
+  const { colors } = useTheme();
 
-  const getVariantStyles = (): { bg: string; border: string; text: string; shadow?: string } => {
+  const getVariantStyles = (): { bg: string; border: string; text: string } => {
     switch (variant) {
       case 'secondary':
         return {
           bg: colors.surfaceElevated,
-          border: colors.border,
+          border: colors.borderStrong,
           text: colors.textPrimary,
         };
       case 'outline':
@@ -67,14 +67,12 @@ export const Button: React.FC<ButtonProps> = ({
           bg: colors.success,
           border: 'transparent',
           text: '#FFFFFF',
-          shadow: mode === 'dark' ? '0 4px 14px rgba(16, 185, 129, 0.25)' : '0 4px 14px rgba(5, 150, 105, 0.20)',
         };
       case 'danger':
         return {
           bg: colors.danger,
           border: 'transparent',
           text: '#FFFFFF',
-          shadow: mode === 'dark' ? '0 4px 14px rgba(239, 68, 68, 0.25)' : '0 4px 14px rgba(220, 38, 38, 0.20)',
         };
       case 'primary':
       default:
@@ -82,9 +80,6 @@ export const Button: React.FC<ButtonProps> = ({
           bg: colors.primary,
           border: 'transparent',
           text: colors.primaryForeground,
-          shadow: mode === 'dark'
-            ? '0 4px 16px rgba(255, 122, 0, 0.35)'
-            : '0 4px 14px rgba(255, 122, 0, 0.22)',
         };
     }
   };
@@ -92,27 +87,25 @@ export const Button: React.FC<ButtonProps> = ({
   const getSizePadding = () => {
     switch (size) {
       case 'sm':
-        return { py: spacing.xs, px: spacing.md, font: 12, height: 36 };
+        return { py: spacing.xs, px: spacing.md, font: 12, height: 34 };
       case 'lg':
-        return { py: spacing.md, px: spacing.xl, font: 15, height: 48 };
+        return { py: spacing.md, px: spacing.xl, font: 15, height: 46 };
       case 'md':
       default:
-        return { py: spacing.sm, px: spacing.lg, font: 13, height: 42 };
+        return { py: spacing.sm, px: spacing.lg, font: 13, height: 40 };
     }
   };
 
-  const { bg, border, text, shadow } = getVariantStyles();
+  const { bg, border, text } = getVariantStyles();
   const { py, px, font, height } = getSizePadding();
 
-  // Smooth cubic-bezier hover & press transitions for web platform
   const webButtonStyle = Platform.OS === 'web'
     ? {
         cursor: disabled || loading ? 'not-allowed' : 'pointer',
         outlineStyle: 'none',
         outlineWidth: 0,
         outlineColor: 'transparent',
-        boxShadow: shadow || 'none',
-        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+        transition: 'all 0.16s cubic-bezier(0.16, 1, 0.3, 1)',
         transform: 'translateZ(0)',
       }
     : {};
@@ -160,7 +153,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs + 2,
   },
   text: {
-    fontWeight: '700',
-    letterSpacing: 0.2,
+    fontWeight: '600',
+    letterSpacing: 0.1,
   },
 });

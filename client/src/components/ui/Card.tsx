@@ -1,10 +1,9 @@
 import React, { ReactNode } from 'react';
 import { View, Text, StyleSheet, StyleProp, ViewStyle, Platform } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { borderRadius, spacing, shadows } from '../../theme/spacing';
-import { GradientView } from './GradientView';
+import { borderRadius, spacing } from '../../theme/spacing';
 
-export type CardVariant = 'default' | 'elevated' | 'hero' | 'highlight' | 'warning' | 'danger';
+export type CardVariant = 'default' | 'elevated' | 'interactive' | 'selected' | 'hero' | 'highlight' | 'warning' | 'danger';
 
 export interface CardProps {
   children: ReactNode;
@@ -19,36 +18,44 @@ export const Card: React.FC<CardProps> = ({
   showAccentBar = false,
   style,
 }) => {
-  const { colors, mode } = useTheme();
+  const { colors } = useTheme();
 
   const getCardStyle = (): { bg: string; border: string; accentBar?: string } => {
     switch (variant) {
       case 'elevated':
         return {
           bg: colors.surfaceElevated,
-          border: colors.borderSubtle,
+          border: colors.borderStrong,
+        };
+      case 'interactive':
+        return {
+          bg: colors.surfaceHover,
+          border: colors.borderStrong,
+        };
+      case 'selected':
+        return {
+          bg: colors.surfaceSelected,
+          border: colors.primaryBorder,
         };
       case 'hero':
         return {
-          bg: colors.cardHeroBg,
-          border: colors.cardHeroBorder,
-          accentBar: colors.primary,
+          bg: colors.surfaceElevated,
+          border: colors.border,
         };
       case 'highlight':
         return {
-          bg: colors.surface,
+          bg: colors.surfaceElevated,
           border: colors.primaryBorder,
-          accentBar: colors.primary,
         };
       case 'warning':
         return {
-          bg: colors.warningSurface,
-          border: colors.warning,
+          bg: colors.surfaceElevated,
+          border: 'rgba(245, 158, 11, 0.30)',
         };
       case 'danger':
         return {
-          bg: colors.dangerSurface,
-          border: colors.danger,
+          bg: colors.surfaceElevated,
+          border: 'rgba(239, 68, 68, 0.30)',
         };
       case 'default':
       default:
@@ -64,11 +71,8 @@ export const Card: React.FC<CardProps> = ({
 
   const webCardStyle = Platform.OS === 'web'
     ? {
-        boxShadow: mode === 'dark'
-          ? '0 4px 20px rgba(0, 0, 0, 0.40)'
-          : '0 4px 14px rgba(0, 0, 0, 0.04)',
-        transition: 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease-in-out',
-        willChange: 'transform, box-shadow',
+        transition: 'transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s ease-in-out, background-color 0.18s ease-in-out',
+        willChange: 'transform',
       }
     : {};
 
@@ -80,7 +84,6 @@ export const Card: React.FC<CardProps> = ({
           backgroundColor: bg,
           borderColor: border,
         },
-        shadows.sm,
         webCardStyle as any,
         style,
       ]}
@@ -150,7 +153,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   accentBar: {
-    height: 3,
+    height: 2,
     width: '100%',
   },
   header: {
@@ -174,7 +177,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   title: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: -0.1,
   },

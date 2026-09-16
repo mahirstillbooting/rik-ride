@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
-import { spacing } from '../../theme/spacing';
+import { borderRadius, spacing } from '../../theme/spacing';
 
 export interface InputProps extends TextInputProps {
   label?: string;
@@ -33,10 +33,10 @@ export const Input: React.FC<InputProps> = ({
   onBlur,
   ...props
 }) => {
-  const { colors, mode } = useTheme();
+  const { colors } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
 
-  // Eliminate web browser focus ring / outline / shadow completely
+  // Eliminate web browser focus ring / outline / double border completely
   const webInputStyle = Platform.OS === 'web'
     ? ({
         outlineStyle: 'none',
@@ -51,12 +51,8 @@ export const Input: React.FC<InputProps> = ({
         outlineStyle: 'none',
         outlineWidth: 0,
         outlineColor: 'transparent',
-        boxShadow: isFocused
-          ? mode === 'dark'
-            ? '0 0 0 3px rgba(255, 122, 0, 0.20)'
-            : '0 0 0 3px rgba(255, 122, 0, 0.15)'
-          : 'none',
-        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+        boxShadow: 'none',
+        transition: 'border-color 0.16s ease-in-out, background-color 0.16s ease-in-out',
       } as any)
     : {};
 
@@ -76,7 +72,7 @@ export const Input: React.FC<InputProps> = ({
               : isFocused
               ? colors.primary
               : colors.border,
-            borderWidth: isFocused ? 1.5 : 1,
+            borderWidth: 1,
           },
           webWrapperStyle,
         ]}
@@ -127,9 +123,9 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
-    height: 46,
+    height: 44,
   },
   input: {
     flex: 1,

@@ -52,7 +52,7 @@ export const Select: React.FC<SelectProps> = ({
         style={[
           styles.selectTrigger,
           {
-            backgroundColor: colors.surface,
+            backgroundColor: colors.surfaceElevated,
             borderColor: colors.border,
           },
         ]}
@@ -106,7 +106,7 @@ export const Select: React.FC<SelectProps> = ({
                       styles.optionItem,
                       {
                         backgroundColor: isSelected
-                          ? colors.accentSurface
+                          ? colors.primarySurface
                           : 'transparent',
                         borderBottomColor: colors.borderSubtle,
                       },
@@ -121,7 +121,7 @@ export const Select: React.FC<SelectProps> = ({
                         styles.optionText,
                         {
                           color: isSelected
-                            ? colors.accent
+                            ? colors.primary
                             : colors.textPrimary,
                           fontWeight: isSelected ? '700' : '400',
                         },
@@ -145,9 +145,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.xs + 2,
+    letterSpacing: 0.2,
   },
   selectTrigger: {
     flexDirection: 'row',
@@ -155,7 +156,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     borderWidth: 1,
     borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: spacing.md,
     height: 44,
   },
   triggerText: {
@@ -176,17 +177,17 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   modalTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     marginBottom: spacing.md,
   },
   optionItem: {
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
     paddingHorizontal: spacing.sm,
     borderRadius: borderRadius.sm,
     borderBottomWidth: 1,
   },
   optionText: {
-    fontSize: 14,
+    fontSize: 13,
   },
 });

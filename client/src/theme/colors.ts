@@ -1,14 +1,17 @@
 /**
- * RIK-RIDE Design System Dual-Theme Color Tokens
- * Obsidian Tech (Dark Mode) & Editorial Alabaster (Light Mode)
+ * RIK-RIDE Visual UI/UX Design System V2 — Premium Modern Dark/Neutral Product Palette
  * 
- * Palette Specs:
- * Dark Canvas: #08080A | Light Canvas: #F8F9FA
- * Dark Surface: #121316 | Light Surface: #FFFFFF
- * Dark Secondary Surface: #181920 | Light Secondary Surface: #F0F2F5
- * Dark Hairline Border: rgba(255, 255, 255, 0.08) | Light Hairline Border: rgba(0, 0, 0, 0.08)
- * Primary CTA Accent: #FF7A00 (Electric Amber)
- * Dark Text: #F8F8FA / #8E909B | Light Text: #0B0B0E / #64748B
+ * Primary Dark Palette:
+ * Background: #08090A / #0B0C0E / #101113
+ * Elevated Surfaces: #141517 / #18191C / #1D1F22
+ * Higher Elevation: #222428 / #27292D
+ * Text: #F4F4F2 / #E7E7E4
+ * Secondary Text: #A1A3A8 / #85878D / #6F7177
+ * Borders: rgba(255, 255, 255, 0.07) / #222428
+ * Accent: Muted Sophisticated Orange (#E2763A / #D96832 / #C85D2C)
+ * 
+ * STRICT RULE: ABSOLUTELY NO DECORATIVE BLUE, CYAN, NAVY, INDIGO, OR BLUE-GREY.
+ * GREEN IS STRICTLY SEMANTIC ONLY (SUCCESS / ACTIVE / APPROVED / ONLINE).
  */
 
 export interface ThemeColors {
@@ -16,6 +19,7 @@ export interface ThemeColors {
   surface: string;
   surfaceElevated: string;
   surfaceHover: string;
+  surfaceSelected: string;
   border: string;
   borderSubtle: string;
   borderStrong: string;
@@ -24,7 +28,7 @@ export interface ThemeColors {
   textSecondary: string;
   textMuted: string;
   
-  // Primary Orange Brand System Tokens
+  // Muted Sophisticated Orange Accent Tokens
   primary: string;
   primaryHover: string;
   primaryLight: string;
@@ -34,7 +38,7 @@ export interface ThemeColors {
   primarySurface: string;
   primaryBorder: string;
   
-  // Secondary Soft Amber Tokens
+  // Secondary Accent System Tokens
   accent: string;
   accentSurface: string;
   accentGlow: string;
@@ -42,7 +46,7 @@ export interface ThemeColors {
   cardHeroBg: string;
   cardHeroBorder: string;
 
-  // Semantic Status Tokens (Approval = Muted Green, Suspend = Muted Red)
+  // Semantic Status Tokens (Green = Approval/Online, Red = Suspend/Offline, Amber = Warning/Pending)
   success: string;
   successSurface: string;
   warning: string;
@@ -57,87 +61,90 @@ export interface ThemeColors {
 }
 
 export const darkColors: ThemeColors = {
-  background: '#08080A',       // Deep Obsidian Canvas
-  surface: '#121316',          // Zinc Black Surface
-  surfaceElevated: '#181920',  // Subtle Dark Fill for Inputs/Sheets
-  surfaceHover: '#202127',     // Dark Hover Highlight
-  border: 'rgba(255, 255, 255, 0.08)', // Hairline Border
+  background: '#08090A',        // Deep Obsidian Canvas
+  surface: '#101113',           // Dark Surface Base
+  surfaceElevated: '#141517',   // Elevated Card Fill
+  surfaceHover: '#18191C',      // Interactive Hover Fill
+  surfaceSelected: '#1D1F22',   // Active Selected Surface
+  border: 'rgba(255, 255, 255, 0.07)', // Ultra-subtle hairline border
   borderSubtle: 'rgba(255, 255, 255, 0.04)',
-  borderStrong: '#2A2C34',
+  borderStrong: '#222428',
 
-  textPrimary: '#F8F8FA',      // Porcelain White
-  textSecondary: '#8E909B',    // Muted Pewter
-  textMuted: '#525460',        // Dark Slate Gray
+  textPrimary: '#F4F4F2',       // Porcelain Off-White
+  textSecondary: '#A1A3A8',     // Cool Pewter Gray
+  textMuted: '#6F7177',         // Muted Carbon Gray
 
-  // Primary Electric Amber (#FF7A00)
-  primary: '#FF7A00',
-  primaryHover: '#FF6600',
-  primaryLight: '#FFA347',
-  primaryDark: '#D96300',
-  primaryMuted: 'rgba(255, 122, 0, 0.12)',
+  // Muted Sophisticated Orange Accent (#E2763A)
+  primary: '#E2763A',
+  primaryHover: '#D96832',
+  primaryLight: '#EC884D',
+  primaryDark: '#C85D2C',
+  primaryMuted: 'rgba(226, 118, 58, 0.08)',
   primaryForeground: '#FFFFFF',
-  primarySurface: 'rgba(255, 122, 0, 0.10)',
-  primaryBorder: 'rgba(255, 122, 0, 0.28)',
+  primarySurface: 'rgba(226, 118, 58, 0.08)',
+  primaryBorder: 'rgba(226, 118, 58, 0.22)',
 
-  accent: '#FFA347',
-  accentSurface: 'rgba(255, 163, 71, 0.12)',
-  accentGlow: 'rgba(255, 122, 0, 0.20)',
+  accent: '#D96832',
+  accentSurface: 'rgba(217, 104, 50, 0.08)',
+  accentGlow: 'rgba(226, 118, 58, 0.12)',
 
-  cardHeroBg: '#14151B',
-  cardHeroBorder: 'rgba(255, 122, 0, 0.28)',
+  cardHeroBg: '#141517',
+  cardHeroBorder: 'rgba(226, 118, 58, 0.22)',
 
-  success: '#10B981',          // Muted Emerald Green for Approval
-  successSurface: 'rgba(16, 185, 129, 0.12)',
-  warning: '#F59E0B',          // Muted Amber Warning
-  warningSurface: 'rgba(245, 158, 11, 0.12)',
-  danger: '#EF4444',           // Muted Crimson Red for Suspend
-  dangerSurface: 'rgba(239, 68, 68, 0.12)',
-  info: '#FF7A00',
-  infoSurface: 'rgba(255, 122, 0, 0.10)',
+  // Semantic Status Tokens (Green = Semantic Only)
+  success: '#10B981',           // Muted Emerald Green for Active/Approved
+  successSurface: 'rgba(16, 185, 129, 0.08)',
+  warning: '#F59E0B',           // Muted Amber Warning
+  warningSurface: 'rgba(245, 158, 11, 0.08)',
+  danger: '#EF4444',            // Muted Crimson Red for Danger/Suspended
+  dangerSurface: 'rgba(239, 68, 68, 0.08)',
+  info: '#E2763A',              // Info matches Muted Sophisticated Orange
+  infoSurface: 'rgba(226, 118, 58, 0.08)',
 
-  overlay: 'rgba(13, 14, 18, 0.75)',
-  mapBg: '#08080A',
+  overlay: 'rgba(8, 9, 10, 0.85)',
+  mapBg: '#08090A',
 };
 
 export const lightColors: ThemeColors = {
-  background: '#F8F9FA',       // Soft Off-White / Alabaster Canvas
-  surface: '#FFFFFF',          // Pure White Elevated Surface
-  surfaceElevated: '#F0F2F5',  // Soft Gray Fill for Inputs/Sheets
-  surfaceHover: '#E4E7EB',     // Smooth Hover Fill
-  border: 'rgba(0, 0, 0, 0.08)', // Hairline Border
+  background: '#F8F9FA',        // Editorial Off-White Canvas
+  surface: '#FFFFFF',           // Pure White Surface
+  surfaceElevated: '#F0F2F5',   // Elevated Warm Gray Container
+  surfaceHover: '#E4E7EB',      // Smooth Hover Fill
+  surfaceSelected: '#E9ECEF',   // Active Selected Surface
+  border: 'rgba(0, 0, 0, 0.08)', // Subtle Hairline Border
   borderSubtle: 'rgba(0, 0, 0, 0.04)',
   borderStrong: '#CBD5E1',
 
-  textPrimary: '#0B0B0E',      // Deep Charcoal Black
-  textSecondary: '#64748B',    // Cool Slate Gray
-  textMuted: '#94A3B8',        // Soft Slate Placeholder
+  textPrimary: '#0B0B0E',       // Deep Charcoal Black
+  textSecondary: '#64748B',     // Cool Slate Gray
+  textMuted: '#94A3B8',         // Soft Slate Placeholder
 
-  // Primary Electric Amber (#FF7A00)
-  primary: '#FF7A00',
-  primaryHover: '#F97316',
-  primaryLight: '#FFA347',
-  primaryDark: '#EA580C',
-  primaryMuted: 'rgba(255, 122, 0, 0.08)',
+  // Muted Sophisticated Orange Accent (#E2763A)
+  primary: '#E2763A',
+  primaryHover: '#D96832',
+  primaryLight: '#EC884D',
+  primaryDark: '#C85D2C',
+  primaryMuted: 'rgba(226, 118, 58, 0.06)',
   primaryForeground: '#FFFFFF',
-  primarySurface: 'rgba(255, 122, 0, 0.08)',
-  primaryBorder: 'rgba(255, 122, 0, 0.22)',
+  primarySurface: 'rgba(226, 118, 58, 0.06)',
+  primaryBorder: 'rgba(226, 118, 58, 0.18)',
 
-  accent: '#FFA347',
-  accentSurface: 'rgba(255, 163, 71, 0.10)',
-  accentGlow: 'rgba(255, 122, 0, 0.15)',
+  accent: '#D96832',
+  accentSurface: 'rgba(217, 104, 50, 0.06)',
+  accentGlow: 'rgba(226, 118, 58, 0.10)',
 
   cardHeroBg: '#FFF7ED',
   cardHeroBorder: '#FED7AA',
 
-  success: '#059669',          // Muted Emerald Green
-  successSurface: 'rgba(5, 150, 105, 0.08)',
-  warning: '#D97706',
-  warningSurface: 'rgba(217, 119, 6, 0.08)',
-  danger: '#DC2626',           // Muted Crimson Red
-  dangerSurface: 'rgba(220, 38, 38, 0.08)',
-  info: '#FF7A00',
-  infoSurface: 'rgba(255, 122, 0, 0.08)',
+  success: '#059669',           // Muted Emerald Green
+  successSurface: 'rgba(5, 150, 105, 0.06)',
+  warning: '#D97706',           // Muted Amber Warning
+  warningSurface: 'rgba(217, 119, 6, 0.06)',
+  danger: '#DC2626',            // Muted Crimson Red
+  dangerSurface: 'rgba(220, 38, 38, 0.06)',
+  info: '#E2763A',
+  infoSurface: 'rgba(226, 118, 58, 0.06)',
 
-  overlay: 'rgba(255, 255, 255, 0.80)',
+  overlay: 'rgba(255, 255, 255, 0.85)',
   mapBg: '#F8F9FA',
 };

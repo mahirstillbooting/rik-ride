@@ -6,9 +6,8 @@ import { useTheme } from '../../theme/ThemeContext';
 export type GradientPreset =
   | 'darkHero'
   | 'accentHero'
-  | 'orangeHighlight'
-  | 'cyanHighlight'
   | 'charcoalElevated'
+  | 'subtleMuted'
   | 'custom';
 
 export interface GradientViewProps {
@@ -36,29 +35,25 @@ export const GradientView: React.FC<GradientViewProps> = ({
     if (mode === 'dark') {
       switch (preset) {
         case 'darkHero':
-          return ['#0B0B0E', '#121316'];
+          return ['#08090A', '#101113'];
         case 'accentHero':
-          return ['#121316', 'rgba(255, 106, 0, 0.12)'];
-        case 'orangeHighlight':
-          return ['#FF6A00', '#D94F00'];
-        case 'cyanHighlight':
-          return ['#4DD0E1', '#00838F'];
+          return ['#101113', 'rgba(226, 118, 58, 0.06)'];
+        case 'subtleMuted':
+          return ['#141517', '#18191C'];
         case 'charcoalElevated':
         default:
-          return ['#121316', '#18191E'];
+          return ['#101113', '#141517'];
       }
     } else {
       switch (preset) {
         case 'darkHero':
         case 'accentHero':
-          return ['#FFF7ED', '#FFFFFF'];
-        case 'orangeHighlight':
-          return ['#FF6A00', '#D94F00'];
-        case 'cyanHighlight':
-          return ['#00838F', '#006064'];
+          return ['#F8F9FA', '#FFFFFF'];
+        case 'subtleMuted':
+          return ['#FFFFFF', '#F0F2F5'];
         case 'charcoalElevated':
         default:
-          return ['#FFFFFF', '#F1F3F5'];
+          return ['#FFFFFF', '#F8F9FA'];
       }
     }
   };

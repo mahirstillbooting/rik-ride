@@ -839,12 +839,118 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
               </div>
             </div>
 
-            {/* Modal Leaflet Canvas */}
-            <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}>
+            {/* Modal Leaflet Canvas Container */}
+            <div style={{ flex: 1, position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
               <div
                 ref={modalMapContainerRef}
                 style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }}
               />
+
+              {/* Floating Exit Overlay Button at Top-Right of Expanded Map Canvas */}
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '16px',
+                  right: '16px',
+                  zIndex: 9999,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    backgroundColor: '#18181B',
+                    color: '#FAFAFA',
+                    border: `1px solid ${colors.primary}`,
+                    borderRadius: '8px',
+                    padding: '8px 14px',
+                    fontSize: '13px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+                  }}
+                >
+                  <Icon name="x" size={16} color={colors.primary} />
+                  <span style={{ color: colors.primary }}>Exit Expanded Map</span>
+                </button>
+              </div>
+
+              {/* Floating Map Control Stack for Expanded Modal Canvas */}
+              <View style={[styles.mapControls, { zIndex: 9999, bottom: 60 }]}>
+                <TouchableOpacity
+                  style={[styles.controlBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.primaryBorder }]}
+                  onPress={handleCloseModal}
+                >
+                  <Icon name="minimize-2" size={14} color={colors.primary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.controlBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+                  onPress={handleModalRecenter}
+                >
+                  <Icon name="navigation" size={14} color={isModalUserPanning ? colors.primary : colors.textPrimary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.controlBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+                  onPress={handleModalZoomIn}
+                >
+                  <Icon name="plus" size={14} color={colors.textPrimary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.controlBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+                  onPress={handleModalZoomOut}
+                >
+                  <Icon name="minus" size={14} color={colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Anchored Rickshaw Summary Card in Expanded Modal */}
+              {selectedRickshaw && (
+                <View style={[styles.selectedCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.primary, zIndex: 99999 }]}>
+                  <View style={styles.selectedRow}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.selectedTitle, { color: colors.primary }]}>
+                          Rickshaw {selectedRickshaw.shortVehicleNumber}
+                        </Text>
+                        <Badge label={selectedRickshaw.status} variant="success" />
+                      </View>
+                      <Text style={[styles.selectedDesc, { color: colors.textPrimary }]}>
+                        Driver: {selectedRickshaw.driverName} • {selectedRickshaw.avgRating ? `★ ${selectedRickshaw.avgRating} (${selectedRickshaw.ratingsCount})` : '★ New driver'}
+                        {selectedRickshaw.distanceKm !== null ? ` • ${selectedRickshaw.distanceKm} km away` : ''}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setSelectedRickshaw(null)} style={{ padding: 4 }}>
+                      <Icon name="x" size={18} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.actionBtnRow}>
+                    <Button
+                      title="Call Driver"
+                      variant="primary"
+                      size="sm"
+                      icon={<Icon name="phone" size={14} color="#FFFFFF" />}
+                      onPress={() => handleCallDriver(selectedRickshaw.driverPhone)}
+                    />
+                    <Button
+                      title="View Details"
+                      variant="outline"
+                      size="sm"
+                      icon={<Icon name="info" size={14} color={colors.textPrimary} />}
+                      onPress={() => setShowDetailModal(true)}
+                    />
+                  </View>
+                </View>
+              )}
             </div>
 
             {/* Modal Footer */}

@@ -12,7 +12,7 @@ import {
 import { useTheme } from '../../theme/ThemeContext';
 import { borderRadius, spacing } from '../../theme/spacing';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface ButtonProps {
@@ -59,6 +59,12 @@ export const Button: React.FC<ButtonProps> = ({
           bg: 'transparent',
           border: 'transparent',
           text: colors.textSecondary,
+        };
+      case 'success':
+        return {
+          bg: colors.success,
+          border: 'transparent',
+          text: '#FFFFFF',
         };
       case 'danger':
         return {
@@ -148,4 +154,3 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 });
-

@@ -1,7 +1,12 @@
 /**
- * RIK-RIDE Design System Color Tokens — Cyber Obsidian & Vibrant Orange Edition
- * Unified Identity: Deep Obsidian / Charcoal Black / Neutral Greys / Soft White / Vibrant Orange (#FF6A00)
- * ABSOLUTE RULE: ZERO GREEN OR GREEN-ADJACENT ACCENTS IN EITHER DARK OR LIGHT THEME.
+ * RIK-RIDE Design System Color Tokens — Amber-Orange & Refined Semantic Approval/Suspend Tokens
+ * 
+ * Primary Accent / CTA: #FF7A00 (High-energy, crisp amber-orange)
+ * Soft Amber (Readable Text): #FFA347 (Desaturated, lifted lightness for labels & secondary badges)
+ * Neon / High-Contrast: #FF6600 (Saturated racing orange for focal points & glow shadows)
+ * Subtle Tint / Container: rgba(255, 122, 0, 0.10) / #FF7A001A (10% opacity container overlay)
+ * Approval (Good Muted Green): #10B981 (Soft emerald for approvals & active states)
+ * Suspend (Good Muted Red): #EF4444 (Soft crimson for suspensions, denials & danger actions)
  */
 
 export interface ThemeColors {
@@ -17,7 +22,7 @@ export interface ThemeColors {
   textSecondary: string;
   textMuted: string;
   
-  // Primary Orange Brand System Tokens (#FF6A00)
+  // Primary Orange Brand System Tokens
   primary: string;
   primaryHover: string;
   primaryLight: string;
@@ -27,7 +32,7 @@ export interface ThemeColors {
   primarySurface: string;
   primaryBorder: string;
   
-  // Secondary Tech Cyan Tokens
+  // Secondary Soft Amber Tokens
   accent: string;
   accentSurface: string;
   accentGlow: string;
@@ -35,7 +40,7 @@ export interface ThemeColors {
   cardHeroBg: string;
   cardHeroBorder: string;
 
-  // Semantic Status Tokens
+  // Semantic Status Tokens (Approval = Muted Green, Suspend = Muted Red)
   success: string;
   successSurface: string;
   warning: string;
@@ -62,33 +67,33 @@ export const darkColors: ThemeColors = {
   textSecondary: '#8E8F99',    // Slate Gray
   textMuted: '#52535A',        // Deep Carbon Gray
 
-  // Primary Vibrant Orange System (#FF6A00)
-  primary: '#FF6A00',
-  primaryHover: '#FF7A1A',
-  primaryLight: '#FF8A3D',
-  primaryDark: '#D94F00',
-  primaryMuted: 'rgba(255, 106, 0, 0.14)',
-  primaryForeground: '#FFFFFF', // Crisp White text on Vibrant Orange
-  primarySurface: 'rgba(255, 106, 0, 0.10)',
-  primaryBorder: 'rgba(255, 106, 0, 0.30)',
+  // Primary Crisp Amber-Orange (#FF7A00)
+  primary: '#FF7A00',
+  primaryHover: '#FF6600',     // Neon Racing Orange
+  primaryLight: '#FFA347',     // Soft Amber
+  primaryDark: '#D96300',
+  primaryMuted: 'rgba(255, 122, 0, 0.10)',
+  primaryForeground: '#FFFFFF',
+  primarySurface: 'rgba(255, 122, 0, 0.10)', // #FF7A001A
+  primaryBorder: 'rgba(255, 122, 0, 0.25)',
 
-  // Secondary Tech Cyan / Ice Blue (#4DD0E1)
-  accent: '#4DD0E1',
-  accentSurface: 'rgba(77, 208, 225, 0.12)',
-  accentGlow: 'rgba(77, 208, 225, 0.20)',
+  // Secondary Soft Amber (#FFA347)
+  accent: '#FFA347',
+  accentSurface: 'rgba(255, 163, 71, 0.12)',
+  accentGlow: 'rgba(255, 102, 0, 0.20)',
 
   cardHeroBg: '#16171C',
-  cardHeroBorder: 'rgba(255, 106, 0, 0.30)',
+  cardHeroBorder: 'rgba(255, 122, 0, 0.25)',
 
-  // Semantic Status Tokens (ZERO GREEN — Neutral Slate, Dark Gray & Subtle Orange)
-  success: '#FF7043',          // Subtle Warm Orange active state
-  successSurface: 'rgba(255, 112, 67, 0.12)',
-  warning: '#FF5722',          // Dark Orange / Coral alert accent
-  warningSurface: 'rgba(255, 87, 34, 0.12)',
-  danger: '#FF5722',           // Dark Orange / Coral destructive action
-  dangerSurface: 'rgba(255, 87, 34, 0.12)',
-  info: '#FF6A00',             // Info matches Brand Orange
-  infoSurface: 'rgba(255, 106, 0, 0.12)',
+  // Semantic Approval & Suspend Tokens
+  success: '#10B981',          // Muted Emerald Green for Approval / Approved state
+  successSurface: 'rgba(16, 185, 129, 0.12)',
+  warning: '#F59E0B',          // Muted Amber Warning
+  warningSurface: 'rgba(245, 158, 11, 0.12)',
+  danger: '#EF4444',           // Muted Crimson Red for Suspend / Denied / Danger state
+  dangerSurface: 'rgba(239, 68, 68, 0.12)',
+  info: '#FF7A00',             // Info matches Primary Amber-Orange
+  infoSurface: 'rgba(255, 122, 0, 0.10)',
 
   overlay: 'rgba(11, 11, 14, 0.88)',
   mapBg: '#090A0C',
@@ -108,30 +113,30 @@ export const lightColors: ThemeColors = {
   textMuted: '#8E8F99',        // Slate grey muted text
 
   // Primary Orange System
-  primary: '#FF6A00',
+  primary: '#FF7A00',
   primaryHover: '#EA580C',
-  primaryLight: '#FF8A3D',
-  primaryDark: '#D94F00',
-  primaryMuted: 'rgba(255, 106, 0, 0.10)',
+  primaryLight: '#FFA347',
+  primaryDark: '#D96300',
+  primaryMuted: 'rgba(255, 122, 0, 0.08)',
   primaryForeground: '#FFFFFF',
-  primarySurface: 'rgba(255, 106, 0, 0.08)',
-  primaryBorder: 'rgba(255, 106, 0, 0.26)',
+  primarySurface: 'rgba(255, 122, 0, 0.06)',
+  primaryBorder: 'rgba(255, 122, 0, 0.20)',
 
-  accent: '#FF6A00',
-  accentSurface: 'rgba(255, 106, 0, 0.08)',
-  accentGlow: 'rgba(255, 106, 0, 0.15)',
+  accent: '#FF7A00',
+  accentSurface: 'rgba(255, 122, 0, 0.08)',
+  accentGlow: 'rgba(255, 122, 0, 0.15)',
 
   cardHeroBg: '#FFF7ED',
   cardHeroBorder: '#FFEDD5',
 
-  success: '#E64A19',
-  successSurface: 'rgba(230, 74, 25, 0.08)',
-  warning: '#E64A19',
-  warningSurface: 'rgba(230, 74, 25, 0.08)',
-  danger: '#E64A19',
-  dangerSurface: 'rgba(230, 74, 25, 0.08)',
-  info: '#FF6A00',
-  infoSurface: 'rgba(255, 106, 0, 0.08)',
+  success: '#059669',          // Muted Green for light mode
+  successSurface: 'rgba(5, 150, 105, 0.08)',
+  warning: '#D97706',
+  warningSurface: 'rgba(217, 119, 6, 0.08)',
+  danger: '#DC2626',           // Muted Red for light mode
+  dangerSurface: 'rgba(220, 38, 38, 0.08)',
+  info: '#FF7A00',
+  infoSurface: 'rgba(255, 122, 0, 0.08)',
 
   overlay: 'rgba(18, 19, 22, 0.55)',
   mapBg: '#E9ECEF',

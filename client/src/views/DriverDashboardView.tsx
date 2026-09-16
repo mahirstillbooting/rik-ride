@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import {
   DriverVehicleData,
   DriverHistoryRecord,
 } from '../services/driverService';
+import { locationApiService, SharingStatus } from '../services/locationService';
 
 export const DriverDashboardView: React.FC = () => {
   const { colors } = useTheme();
@@ -56,6 +57,36 @@ export const DriverDashboardView: React.FC = () => {
   const [selfModelName, setSelfModelName] = useState('');
   const [selfMfgYear, setSelfMfgYear] = useState('2024');
   const [submittingVehicle, setSubmittingVehicle] = useState(false);
+
+  // Live Location & GPS Telemetry States
+  const [sharingStatus, setSharingStatus] = useState<SharingStatus>('LOCATION_OFF');
+  const [isSharing, setIsSharing] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [startingSharing, setStartingSharing] = useState(false);
+  const [currentLoc, setCurrentLoc] = useState<{
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    speed?: number;
+    heading?: number;
+    timestamp?: string;
+    source?: string;
+  } | null>(null);
+  const [lastUpdateTs, setLastUpdateTs] = useState<Date | null>(null);
+
+  // Dev Location Simulator States
+  const [showSimPanel, setShowSimPanel] = useState(false);
+  const [simLat, setSimLat] = useState('23.8103');
+  const [simLng, setSimLng] = useState('90.4125');
+  const [simSpeed, setSimSpeed] = useState('15');
+  const [simHeading, setSimHeading] = useState('90');
+  const [simAccuracy, setSimAccuracy] = useState('10');
+  const [autoSimActive, setAutoSimActive] = useState(false);
+
+  // Tracking refs
+  const watchIdRef = useRef<number | null>(null);
+  const lastSentTsRef = useRef<number>(0);
+  const autoSimIntervalRef = useRef<any>(null);
 
   // Sync route ID to active tab
   useEffect(() => {
@@ -91,6 +122,26 @@ export const DriverDashboardView: React.FC = () => {
     setLoading(false);
   }, []);
 
+  // Fetch initial location status from backend
+  const syncLocationStatus = useCallback(async () => {
+    const res = await locationApiService.getStatus();
+    if (res.success) {
+      if (res.sharingStatus) {
+        setSharingStatus(res.sharingStatus);
+        setIsSharing(res.sharingStatus === 'LOCATION_ACTIVE');
+      }
+      if (res.lastLocation) {
+        setCurrentLoc(res.lastLocation);
+        setLastUpdateTs(new Date(res.lastLocation.timestamp));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDriverData();
+    syncLocationStatus();
+  }, [loadDriverData, syncLocationStatus]);
+
   // Load History Log
   const loadHistoryData = useCallback(async () => {
     setLoadingHistory(true);
@@ -110,13 +161,195 @@ export const DriverDashboardView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    loadDriverData();
-  }, [loadDriverData]);
-
-  useEffect(() => {
     if (activeTab === 'history') loadHistoryData();
     if (activeTab === 'garage') loadGarageData();
   }, [activeTab, loadHistoryData, loadGarageData]);
+
+  // Cleanup location tracking on unmount
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+      if (autoSimIntervalRef.current) {
+        clearInterval(autoSimIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Location update handler with 5s throttling
+  const sendLocationUpdate = useCallback(
+    async (
+      lat: number,
+      lng: number,
+      accuracy?: number,
+      speed?: number,
+      heading?: number,
+      source: 'DEVICE_GPS' | 'SIMULATED' = 'DEVICE_GPS',
+      force: boolean = false
+    ) => {
+      const now = Date.now();
+      if (!force && now - lastSentTsRef.current < 4500) {
+        return;
+      }
+      lastSentTsRef.current = now;
+
+      const payload = {
+        latitude: lat,
+        longitude: lng,
+        accuracy,
+        speed,
+        heading,
+        source,
+        timestamp: new Date().toISOString(),
+      };
+
+      const res = await locationApiService.updateLocation(payload);
+      if (res.success) {
+        setCurrentLoc({
+          latitude: lat,
+          longitude: lng,
+          accuracy,
+          speed,
+          heading,
+          timestamp: res.timestamp || payload.timestamp,
+          source,
+        });
+        setLastUpdateTs(new Date());
+        setSharingStatus('LOCATION_ACTIVE');
+        setLocationError(null);
+      } else {
+        if (res.error?.includes('Stale location')) {
+          console.warn('Location update rejected as stale:', res.error);
+        } else {
+          setLocationError(res.error || 'Failed to sync live location');
+          showToast(res.error || 'Location sync error', 'danger');
+        }
+      }
+    },
+    [showToast]
+  );
+
+  // Start Live Location Sharing
+  const handleStartSharing = async () => {
+    setStartingSharing(true);
+    setLocationError(null);
+
+    const res = await locationApiService.startSharing();
+    setStartingSharing(false);
+
+    if (!res.success) {
+      setLocationError(res.error || 'Location sharing initialization failed');
+      showToast(res.error || 'Cannot start location sharing', 'danger');
+      return;
+    }
+
+    setIsSharing(true);
+    setSharingStatus('LOCATION_ACTIVE');
+    showToast(res.message || 'Live Location Sharing activated!', 'success');
+
+    // Attempt browser/device watchPosition
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      try {
+        const id = navigator.geolocation.watchPosition(
+          (pos) => {
+            sendLocationUpdate(
+              pos.coords.latitude,
+              pos.coords.longitude,
+              pos.coords.accuracy,
+              pos.coords.speed || undefined,
+              pos.coords.heading || undefined,
+              'DEVICE_GPS'
+            );
+          },
+          (err) => {
+            console.warn('Browser Geolocation error:', err.message);
+            setLocationError(`Browser GPS notice: ${err.message}. You can use Dev Location Simulator below.`);
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
+        );
+        watchIdRef.current = id;
+      } catch (e: any) {
+        console.warn('Failed to attach watchPosition:', e);
+      }
+    } else {
+      setLocationError('Device/Browser GPS is not available. Please use Dev Location Simulator.');
+    }
+  };
+
+  // Stop Live Location Sharing
+  const handleStopSharing = async () => {
+    if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
+    if (autoSimIntervalRef.current) {
+      clearInterval(autoSimIntervalRef.current);
+      autoSimIntervalRef.current = null;
+      setAutoSimActive(false);
+    }
+
+    await locationApiService.stopSharing();
+    setIsSharing(false);
+    setSharingStatus('LOCATION_OFF');
+    showToast('Live Location Sharing stopped', 'info');
+  };
+
+  // Trigger manual simulated update
+  const handleSimulatedUpdate = () => {
+    const lat = parseFloat(simLat);
+    const lng = parseFloat(simLng);
+    const spd = parseFloat(simSpeed) || 0;
+    const hdg = parseFloat(simHeading) || 0;
+    const acc = parseFloat(simAccuracy) || 10;
+
+    if (isNaN(lat) || isNaN(lng)) {
+      showToast('Please enter valid numeric latitude and longitude', 'warning');
+      return;
+    }
+
+    sendLocationUpdate(lat, lng, acc, spd, hdg, 'SIMULATED', true);
+    showToast(`Simulated location sent: [${lat.toFixed(4)}, ${lng.toFixed(4)}]`, 'success');
+  };
+
+  // Toggle Auto-Drive Simulator
+  const handleToggleAutoSim = () => {
+    if (autoSimActive) {
+      if (autoSimIntervalRef.current) {
+        clearInterval(autoSimIntervalRef.current);
+        autoSimIntervalRef.current = null;
+      }
+      setAutoSimActive(false);
+      showToast('Auto-Drive Simulator stopped', 'info');
+    } else {
+      let currentSimLat = parseFloat(simLat) || 23.8103;
+      let currentSimLng = parseFloat(simLng) || 90.4125;
+
+      setAutoSimActive(true);
+      showToast('Auto-Drive Simulator activated (stepping every 5s)', 'info');
+
+      sendLocationUpdate(currentSimLat, currentSimLng, 10, 18, 90, 'SIMULATED', true);
+
+      autoSimIntervalRef.current = setInterval(() => {
+        currentSimLat += (Math.random() * 0.0003 + 0.0001) * (Math.random() > 0.3 ? 1 : -1);
+        currentSimLng += (Math.random() * 0.0003 + 0.0001) * (Math.random() > 0.3 ? 1 : -1);
+
+        setSimLat(currentSimLat.toFixed(6));
+        setSimLng(currentSimLng.toFixed(6));
+
+        sendLocationUpdate(
+          Number(currentSimLat.toFixed(6)),
+          Number(currentSimLng.toFixed(6)),
+          10,
+          Math.floor(Math.random() * 10 + 12),
+          Math.floor(Math.random() * 360),
+          'SIMULATED',
+          true
+        );
+      }, 5000);
+    }
+  };
 
   // Register or Update Self-Owned Vehicle
   const handleRegisterSelfVehicle = async () => {
@@ -160,6 +393,20 @@ export const DriverDashboardView: React.FC = () => {
 
   const isGarageDriver = driver.driverMode === 'GARAGE_REGISTERED';
   const isAdminActive = driver.accountStatus === 'ACTIVE';
+
+  const getStatusBadgeVariant = (status: SharingStatus) => {
+    switch (status) {
+      case 'LOCATION_ACTIVE':
+        return 'success';
+      case 'LOCATION_STALE':
+        return 'warning';
+      case 'LOCATION_ERROR':
+        return 'danger';
+      case 'LOCATION_OFF':
+      default:
+        return 'neutral';
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -254,18 +501,198 @@ export const DriverDashboardView: React.FC = () => {
         </View>
       </View>
 
-      {/* Operational State Banner */}
-      <View style={[styles.alertBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-        <Icon name="power" size={18} color={colors.textMuted} />
-        <View style={styles.alertTextWrapper}>
-          <Text style={[styles.alertTitle, { color: colors.textPrimary }]}>
-            Shift Operational State: <Text style={{ color: colors.warning }}>OFF-SHIFT / NOT ACTIVE</Text>
-          </Text>
-          <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>
-            Real-time GPS telemetry, live shift controls, and ride dispatches will be activated in future modules.
-          </Text>
-        </View>
-      </View>
+      {/* Live Location Sharing & Shift Control Panel */}
+      <Card variant="elevated" style={styles.locationPanel}>
+        <CardHeader
+          title="Live GPS Telemetry & Shift Control"
+          subtitle="Real-time device location ingestion foundation for authorized drivers"
+          action={
+            <Badge
+              label={sharingStatus.replace('_', ' ')}
+              variant={getStatusBadgeVariant(sharingStatus)}
+            />
+          }
+        />
+        <CardBody style={styles.locationBody}>
+          {/* Main Action Bar */}
+          <View style={styles.locationControlsRow}>
+            {!isSharing ? (
+              <Button
+                title="Start Live Location Sharing"
+                variant="primary"
+                size="md"
+                loading={startingSharing}
+                icon={<Icon name="power" size={16} color="#FFFFFF" />}
+                onPress={handleStartSharing}
+              />
+            ) : (
+              <Button
+                title="Stop Location Sharing"
+                variant="danger"
+                size="md"
+                icon={<Icon name="square" size={16} color="#FFFFFF" />}
+                onPress={handleStopSharing}
+              />
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.simToggleBtn,
+                {
+                  backgroundColor: showSimPanel ? colors.primarySurface : colors.surfaceElevated,
+                  borderColor: showSimPanel ? colors.primary : colors.border,
+                },
+              ]}
+              onPress={() => setShowSimPanel(!showSimPanel)}
+            >
+              <Icon name="settings" size={14} color={showSimPanel ? colors.primary : colors.textSecondary} />
+              <Text
+                style={[
+                  styles.simToggleText,
+                  { color: showSimPanel ? colors.primary : colors.textSecondary },
+                ]}
+              >
+                {showSimPanel ? 'Hide Dev Simulator' : 'Dev Location Simulator'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Location Error Display */}
+          {locationError && (
+            <View style={[styles.alertBanner, { backgroundColor: colors.dangerSurface, borderColor: colors.danger }]}>
+              <Icon name="alert-triangle" size={18} color={colors.danger} />
+              <View style={styles.alertTextWrapper}>
+                <Text style={[styles.alertTitle, { color: colors.danger }]}>GPS Telemetry Status Notice</Text>
+                <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>{locationError}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Active Telemetry Metrics Grid */}
+          {currentLoc && (
+            <View style={styles.telemetryGrid}>
+              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Coordinates (Lat, Lng)</Text>
+                <Text style={[styles.telemetryVal, { color: colors.primary }]}>
+                  {currentLoc.latitude.toFixed(5)}°, {currentLoc.longitude.toFixed(5)}°
+                </Text>
+              </View>
+
+              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>GPS Accuracy</Text>
+                <Text style={[styles.telemetryVal, { color: colors.textPrimary }]}>
+                  {currentLoc.accuracy !== undefined ? `±${currentLoc.accuracy.toFixed(1)} m` : 'Standard'}
+                </Text>
+              </View>
+
+              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Speed & Heading</Text>
+                <Text style={[styles.telemetryVal, { color: colors.textPrimary }]}>
+                  {currentLoc.speed ? `${(currentLoc.speed * 3.6).toFixed(1)} km/h` : '0.0 km/h'}{' '}
+                  {currentLoc.heading !== undefined ? `• ${currentLoc.heading}°` : ''}
+                </Text>
+              </View>
+
+              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Last Ingestion</Text>
+                <Text style={[styles.telemetryVal, { color: colors.textSecondary }]}>
+                  {lastUpdateTs ? lastUpdateTs.toLocaleTimeString() : 'N/A'} ({currentLoc.source || 'DEVICE_GPS'})
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* Dev Location Simulator Panel */}
+          {showSimPanel && (
+            <View style={[styles.simBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+              <Text style={[styles.simHeader, { color: colors.primary }]}>
+                Dev GPS Location Simulator (Web Testing Tool)
+              </Text>
+              <Text style={[styles.historySub, { color: colors.textSecondary }]}>
+                Use standard Dhaka test locations or enter custom coordinates to simulate vehicle movement without physical GPS hardware.
+              </Text>
+
+              {/* Preset Coordinates */}
+              <View style={styles.presetRow}>
+                <TouchableOpacity
+                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  onPress={() => {
+                    setSimLat('23.8103');
+                    setSimLng('90.4125');
+                  }}
+                >
+                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Dhaka Center</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  onPress={() => {
+                    setSimLat('23.7925');
+                    setSimLng('90.4078');
+                  }}
+                >
+                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Gulshan Circle</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  onPress={() => {
+                    setSimLat('23.7516');
+                    setSimLng('90.3782');
+                  }}
+                >
+                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Dhanmondi 27</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  onPress={() => {
+                    setSimLat('23.7330');
+                    setSimLng('90.4172');
+                  }}
+                >
+                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Motijheel Commercial</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Manual Input Grid */}
+              <View style={styles.simInputGrid}>
+                <View style={styles.simInputWrapper}>
+                  <Input label="Latitude" value={simLat} onChangeText={setSimLat} keyboardType="numeric" />
+                </View>
+                <View style={styles.simInputWrapper}>
+                  <Input label="Longitude" value={simLng} onChangeText={setSimLng} keyboardType="numeric" />
+                </View>
+                <View style={styles.simInputWrapper}>
+                  <Input label="Speed (km/h)" value={simSpeed} onChangeText={setSimSpeed} keyboardType="numeric" />
+                </View>
+                <View style={styles.simInputWrapper}>
+                  <Input label="Heading (°)" value={simHeading} onChangeText={setSimHeading} keyboardType="numeric" />
+                </View>
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.simActionRow}>
+                <Button
+                  title="Send Simulated Coordinates"
+                  variant="outline"
+                  size="sm"
+                  icon={<Icon name="navigation" size={14} color={colors.textPrimary} />}
+                  onPress={handleSimulatedUpdate}
+                />
+
+                <Button
+                  title={autoSimActive ? 'Stop Auto-Drive' : 'Auto-Drive Simulator (5s step)'}
+                  variant={autoSimActive ? 'danger' : 'secondary'}
+                  size="sm"
+                  icon={<Icon name="refresh-cw" size={14} color={colors.textPrimary} />}
+                  onPress={handleToggleAutoSim}
+                />
+              </View>
+            </View>
+          )}
+        </CardBody>
+      </Card>
 
       {/* Admin Pending Warning Notice */}
       {!isAdminActive && (
@@ -787,6 +1214,91 @@ const styles = StyleSheet.create({
   navTabText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  locationPanel: {
+    width: '100%',
+  },
+  locationBody: {
+    gap: spacing.md,
+  },
+  locationControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  telemetryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  telemetryCard: {
+    flex: 1,
+    minWidth: 140,
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    gap: 2,
+  },
+  telemetryLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  telemetryVal: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  simToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+  },
+  simToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  simBox: {
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+  },
+  simHeader: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  presetBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+  },
+  presetBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  simInputGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  simInputWrapper: {
+    flex: 1,
+    minWidth: 120,
+  },
+  simActionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   alertBanner: {
     flexDirection: 'row',

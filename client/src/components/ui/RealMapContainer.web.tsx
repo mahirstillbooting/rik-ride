@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, DimensionValue } from 'react-native';
 import { useTheme } from '../../theme/ThemeContext';
 import { borderRadius, spacing } from '../../theme/spacing';
@@ -727,8 +728,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         )}
       </View>
 
-      {/* FULLSCREEN COMMAND-CENTER MAP MODAL */}
-      {isModalOpen && Platform.OS === 'web' && (
+      {/* FULLSCREEN COMMAND-CENTER MAP MODAL (PORTAL TO DOCUMENT.BODY) */}
+      {isModalOpen && Platform.OS === 'web' && typeof document !== 'undefined' && createPortal(
         <div
           onClick={handleCloseModal}
           style={{
@@ -737,9 +738,9 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(8, 9, 10, 0.84)',
-            backdropFilter: 'blur(4px)',
-            zIndex: 99999,
+            backgroundColor: 'rgba(8, 9, 10, 0.88)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 999999,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -760,7 +761,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.85)',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.95)',
               animation: isModalClosing
                 ? 'rikModalExpandOut 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards'
                 : 'rikModalExpandIn 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards',
@@ -808,6 +809,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
                 </div>
               </div>
 
+              {/* Icon Only Action Buttons */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <TouchableOpacity
                   style={[styles.controlBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
@@ -846,42 +848,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
                 style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }}
               />
 
-              {/* Floating Exit Overlay Button at Top-Right of Expanded Map Canvas */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '16px',
-                  right: '16px',
-                  zIndex: 9999,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    backgroundColor: '#18181B',
-                    color: '#FAFAFA',
-                    border: `1px solid ${colors.primary}`,
-                    borderRadius: '8px',
-                    padding: '8px 14px',
-                    fontSize: '13px',
-                    fontWeight: '800',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
-                  }}
-                >
-                  <Icon name="x" size={16} color={colors.primary} />
-                  <span style={{ color: colors.primary }}>Exit Expanded Map</span>
-                </button>
-              </div>
-
-              {/* Floating Map Control Stack for Expanded Modal Canvas */}
+              {/* Floating Map Control Stack for Expanded Modal Canvas (ICON ONLY) */}
               <View style={[styles.mapControls, { zIndex: 9999, bottom: 60 }]}>
                 <TouchableOpacity
                   style={[styles.controlBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.primaryBorder }]}
@@ -981,7 +948,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* DRIVER & VEHICLE INFORMATION DETAIL MODAL */}

@@ -14,6 +14,7 @@ import { RealMapContainer } from '../components/ui/RealMapContainer';
 import { spacing, borderRadius } from '../theme/spacing';
 import { passengerLocationApiService } from '../services/passengerLocationService';
 import { SharingStatus } from '../services/locationService';
+import { clientRideService, RideData } from '../services/rideService';
 
 export const PassengerDashboardView: React.FC = () => {
   const { colors } = useTheme();
@@ -42,7 +43,12 @@ export const PassengerDashboardView: React.FC = () => {
   const [simLat, setSimLat] = useState('23.8103');
   const [simLng, setSimLng] = useState('90.4125');
   const [simAccuracy, setSimAccuracy] = useState('10');
-  const [autoSimActive, setAutoSimActive] = useState(false);
+
+  // Ride Request & Lifecycle States
+  const [destinationText, setDestinationText] = useState('');
+  const [requestingRide, setRequestingRide] = useState(false);
+  const [activeRide, setActiveRide] = useState<RideData | null>(null);
+  const [confirmingCompletion, setConfirmingCompletion] = useState(false);
 
   // Tracking refs
   const watchIdRef = useRef<number | null>(null);
@@ -64,9 +70,25 @@ export const PassengerDashboardView: React.FC = () => {
     }
   }, []);
 
+  // Poll active passenger ride status
+  const pollActiveRide = useCallback(async () => {
+    const res = await clientRideService.getPassengerActiveRide();
+    if (res.success) {
+      setActiveRide(res.ride);
+    }
+  }, []);
+
   useEffect(() => {
     syncLocationStatus();
-  }, [syncLocationStatus]);
+    pollActiveRide();
+
+    // Poll active ride every 3 seconds
+    const rideInterval = setInterval(() => {
+      pollActiveRide();
+    }, 3000);
+
+    return () => clearInterval(rideInterval);
+  }, [syncLocationStatus, pollActiveRide]);
 
   // Cleanup location tracking on unmount
   useEffect(() => {
@@ -80,7 +102,7 @@ export const PassengerDashboardView: React.FC = () => {
     };
   }, []);
 
-  // Location update handler with 4.5s throttling
+  // Location update handler with throttling
   const sendLocationUpdate = useCallback(
     async (
       lat: number,
@@ -126,11 +148,10 @@ export const PassengerDashboardView: React.FC = () => {
           console.warn('Passenger location update rejected as stale:', res.error);
         } else {
           setLocationError(res.error || 'Failed to sync passenger live location');
-          showToast(res.error || 'Passenger location sync error', 'danger');
         }
       }
     },
-    [showToast]
+    []
   );
 
   // Start Live Location Sharing
@@ -151,7 +172,6 @@ export const PassengerDashboardView: React.FC = () => {
     setSharingStatus('LOCATION_ACTIVE');
     showToast(res.message || 'Passenger location sharing activated!', 'success');
 
-    // Attempt browser/device watchPosition
     if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
       try {
         const id = navigator.geolocation.watchPosition(
@@ -191,12 +211,6 @@ export const PassengerDashboardView: React.FC = () => {
       watchIdRef.current = null;
     }
 
-    if (autoSimIntervalRef.current) {
-      clearInterval(autoSimIntervalRef.current);
-      autoSimIntervalRef.current = null;
-      setAutoSimActive(false);
-    }
-
     await passengerLocationApiService.stopSharing();
     setIsSharing(false);
     setSharingStatus('LOCATION_OFF');
@@ -218,6 +232,47 @@ export const PassengerDashboardView: React.FC = () => {
     showToast(`Simulated location set: [${lat.toFixed(4)}, ${lng.toFixed(4)}]`, 'success');
   };
 
+  // Create Ride Request
+  const handleRequestRide = async () => {
+    if (!currentLoc) {
+      showToast('Current location required. Please start GPS or send simulated location first.', 'warning');
+      return;
+    }
+
+    setRequestingRide(true);
+    const res = await clientRideService.createRideRequest({
+      latitude: currentLoc.latitude,
+      longitude: currentLoc.longitude,
+      accuracy: currentLoc.accuracy,
+      destinationText: destinationText.trim() || undefined,
+    });
+    setRequestingRide(false);
+
+    if (res.success && res.ride) {
+      setActiveRide(res.ride);
+      showToast(`Ride requested successfully! (${res.ride.passengerPseudonym})`, 'success');
+    } else {
+      showToast(res.error || 'Failed to request ride', 'danger');
+    }
+  };
+
+  // Confirm Ride Drop-off Completion
+  const handleConfirmCompletion = async () => {
+    if (!activeRide) return;
+
+    setConfirmingCompletion(true);
+    const res = await clientRideService.confirmPassengerCompletion(activeRide.id);
+    setConfirmingCompletion(false);
+
+    if (res.success) {
+      showToast('Drop-off confirmed! Trip completed successfully.', 'success');
+      setActiveRide(null);
+      pollActiveRide();
+    } else {
+      showToast(res.error || 'Failed to confirm drop-off', 'danger');
+    }
+  };
+
   const getStatusBadgeVariant = (status: SharingStatus) => {
     switch (status) {
       case 'LOCATION_ACTIVE':
@@ -227,6 +282,23 @@ export const PassengerDashboardView: React.FC = () => {
       case 'LOCATION_ERROR':
         return 'danger';
       case 'LOCATION_OFF':
+      default:
+        return 'neutral';
+    }
+  };
+
+  const getRideStatusVariant = (status?: string) => {
+    switch (status) {
+      case 'INITIATED':
+        return 'warning';
+      case 'ACCEPTED':
+        return 'info';
+      case 'ACTIVE':
+        return 'success';
+      case 'WAITING_PASSENGER_CONFIRM':
+        return 'warning';
+      case 'COMPLETED':
+        return 'success';
       default:
         return 'neutral';
     }
@@ -250,6 +322,149 @@ export const PassengerDashboardView: React.FC = () => {
           </Text>
         </View>
       </View>
+
+      {/* RIDE DISPATCH & LIFECYCLE SECTION */}
+      {activeRide ? (
+        <Card variant="elevated" style={[styles.activeRideCard, { borderColor: colors.primary }]}>
+          <CardHeader
+            title={`Active Ride Lifecycle — ${activeRide.passengerPseudonym}`}
+            subtitle={`Ride ID: ${activeRide.rideId} • State: ${activeRide.status}`}
+            action={
+              <Badge
+                label={activeRide.status.replace(/_/g, ' ')}
+                variant={getRideStatusVariant(activeRide.status)}
+              />
+            }
+          />
+          <CardBody style={styles.activeRideBody}>
+            {/* Status-specific Alerts */}
+            {activeRide.status === 'INITIATED' && (
+              <View style={[styles.alertBanner, { backgroundColor: colors.warningSurface, borderColor: colors.warning }]}>
+                <Icon name="clock" size={20} color={colors.warning} />
+                <View style={styles.alertTextWrapper}>
+                  <Text style={[styles.alertTitle, { color: colors.warning }]}>Searching for Nearby Drivers</Text>
+                  <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>
+                    Your pickup location [{activeRide.approximatePickupArea}] is dispatched to available drivers within a 15-second acceptance window.
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {activeRide.status === 'ACCEPTED' && (
+              <View style={[styles.alertBanner, { backgroundColor: colors.infoSurface, borderColor: colors.info }]}>
+                <Icon name="check-circle" size={20} color={colors.info} />
+                <View style={styles.alertTextWrapper}>
+                  <Text style={[styles.alertTitle, { color: colors.info }]}>Driver Assigned & En Route!</Text>
+                  <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>
+                    Driver {activeRide.driverId?.name || 'Assigned Driver'} ({activeRide.vehicleId?.shortVehicleNumber || 'Rickshaw'}) is navigating to your pickup location.
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {activeRide.status === 'ACTIVE' && (
+              <View style={[styles.alertBanner, { backgroundColor: colors.successSurface, borderColor: colors.success }]}>
+                <Icon name="navigation" size={20} color={colors.success} />
+                <View style={styles.alertTextWrapper}>
+                  <Text style={[styles.alertTitle, { color: colors.success }]}>Trip in Progress</Text>
+                  <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>
+                    You are currently riding in vehicle {activeRide.vehicleId?.shortVehicleNumber || 'Rickshaw'}. Enjoy your secure ride!
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {activeRide.status === 'WAITING_PASSENGER_CONFIRM' && (
+              <View style={[styles.alertBanner, { backgroundColor: colors.primarySurface, borderColor: colors.primary }]}>
+                <Icon name="map-pin" size={20} color={colors.primary} />
+                <View style={styles.alertTextWrapper}>
+                  <Text style={[styles.alertTitle, { color: colors.primary }]}>Arrived at Destination — Drop-off Confirmation Needed</Text>
+                  <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>
+                    The driver has arrived at your drop-off point. Please confirm drop-off below to record final drop-off GPS coordinates.
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Ride Details Grid */}
+            <View style={styles.telemetryGrid}>
+              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Trip Pseudonym</Text>
+                <Text style={[styles.telemetryVal, { color: colors.primary }]}>{activeRide.passengerPseudonym}</Text>
+              </View>
+
+              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Assigned Driver</Text>
+                <Text style={[styles.telemetryVal, { color: colors.textPrimary }]}>
+                  {activeRide.driverId ? activeRide.driverId.name : 'Awaiting Driver...'}
+                </Text>
+              </View>
+
+              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Electric Rickshaw</Text>
+                <Text style={[styles.telemetryVal, { color: colors.textPrimary }]}>
+                  {activeRide.vehicleId ? activeRide.vehicleId.shortVehicleNumber : 'N/A'}
+                </Text>
+              </View>
+
+              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Destination</Text>
+                <Text style={[styles.telemetryVal, { color: colors.textSecondary }]}>
+                  {activeRide.destinationText || 'Open Destination'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Confirmation Button for WAITING_PASSENGER_CONFIRM or ACTIVE */}
+            {(activeRide.status === 'WAITING_PASSENGER_CONFIRM' || activeRide.status === 'ACTIVE') && (
+              <View style={{ marginTop: spacing.sm }}>
+                <Button
+                  title="Confirm Drop-Off & Finish Trip"
+                  variant="primary"
+                  size="lg"
+                  loading={confirmingCompletion}
+                  icon={<Icon name="check" size={18} color="#FFFFFF" />}
+                  onPress={handleConfirmCompletion}
+                />
+              </View>
+            )}
+          </CardBody>
+        </Card>
+      ) : (
+        /* Ride Request Panel */
+        <Card variant="elevated" style={styles.requestCard}>
+          <CardHeader
+            title="Request an Electric Rickshaw"
+            subtitle="Broadcast ride request with current device GPS coordinates"
+            action={<Badge label="READY" variant="success" />}
+          />
+          <CardBody style={styles.requestBody}>
+            <Input
+              label="Destination (Optional description)"
+              placeholder="e.g. Gulshan-2 Circle, Dhanmondi 27, Banani Block 11..."
+              value={destinationText}
+              onChangeText={setDestinationText}
+            />
+
+            <View style={styles.requestActionRow}>
+              <Button
+                title="Request Electric Rickshaw"
+                variant="primary"
+                size="lg"
+                loading={requestingRide}
+                disabled={!currentLoc}
+                icon={<Icon name="navigation" size={18} color="#FFFFFF" />}
+                onPress={handleRequestRide}
+              />
+              {!currentLoc && (
+                <Text style={[styles.locWarning, { color: colors.warning }]}>
+                  ⚠️ Please start Live GPS or set simulated location below first.
+                </Text>
+              )}
+            </View>
+          </CardBody>
+        </Card>
+      )}
 
       {/* Live GPS Telemetry & Location Sharing Control Panel */}
       <Card variant="elevated" style={styles.locationPanel}>
@@ -473,6 +688,26 @@ const styles = StyleSheet.create({
   },
   passengerSub: {
     fontSize: 13,
+  },
+  requestCard: {
+    width: '100%',
+  },
+  requestBody: {
+    gap: spacing.md,
+  },
+  requestActionRow: {
+    gap: spacing.xs,
+  },
+  locWarning: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  activeRideCard: {
+    width: '100%',
+    borderWidth: 2,
+  },
+  activeRideBody: {
+    gap: spacing.md,
   },
   locationPanel: {
     width: '100%',

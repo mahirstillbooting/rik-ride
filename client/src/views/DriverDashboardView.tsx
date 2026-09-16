@@ -30,6 +30,7 @@ import {
   DriverHistoryRecord,
 } from '../services/driverService';
 import { locationApiService, SharingStatus } from '../services/locationService';
+import { clientRideService, RideData } from '../services/rideService';
 
 export const DriverDashboardView: React.FC = () => {
   const { colors } = useTheme();
@@ -138,10 +139,86 @@ export const DriverDashboardView: React.FC = () => {
     }
   }, []);
 
+  // Ride Dispatch & Lifecycle States
+  const [pendingRides, setPendingRides] = useState<RideData[]>([]);
+  const [activeRide, setActiveRide] = useState<RideData | null>(null);
+  const [acceptingRideId, setAcceptingRideId] = useState<string | null>(null);
+  const [startingRideId, setStartingRideId] = useState<string | null>(null);
+  const [requestingCompletionId, setRequestingCompletionId] = useState<string | null>(null);
+
+  // Poll pending ride dispatches & active trip for driver
+  const pollDriverRides = useCallback(async () => {
+    const activeRes = await clientRideService.getDriverActiveRide();
+    if (activeRes.success) {
+      setActiveRide(activeRes.ride);
+    }
+    const pendingRes = await clientRideService.getDriverPendingRequests();
+    if (pendingRes.success && pendingRes.rides) {
+      setPendingRides(pendingRes.rides);
+    }
+  }, []);
+
   useEffect(() => {
     loadDriverData();
     syncLocationStatus();
-  }, [loadDriverData, syncLocationStatus]);
+    pollDriverRides();
+
+    const interval = setInterval(() => {
+      pollDriverRides();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [loadDriverData, syncLocationStatus, pollDriverRides]);
+
+  // Accept Ride (Atomic First-Trigger-Wins)
+  const handleAcceptRide = async (rideId: string) => {
+    setAcceptingRideId(rideId);
+    const res = await clientRideService.acceptDriverRide(rideId);
+    setAcceptingRideId(null);
+
+    if (res.success && res.ride) {
+      showToast(`Ride accepted! (${res.ride.passengerPseudonym})`, 'success');
+      setActiveRide(res.ride);
+      pollDriverRides();
+    } else {
+      showToast(res.error || 'Failed to accept ride', 'danger');
+      pollDriverRides();
+    }
+  };
+
+  // Start Ride
+  const handleStartRide = async (rideId: string) => {
+    setStartingRideId(rideId);
+    const res = await clientRideService.startDriverRide(rideId);
+    setStartingRideId(null);
+
+    if (res.success && res.ride) {
+      showToast('Trip started successfully!', 'success');
+      setActiveRide(res.ride);
+      pollDriverRides();
+    } else {
+      showToast(res.error || 'Failed to start trip', 'danger');
+    }
+  };
+
+  // Request Completion (Validated speed <= 10 km/h)
+  const handleRequestCompletion = async (rideId: string) => {
+    setRequestingCompletionId(rideId);
+    const res = await clientRideService.requestDriverCompletion(rideId);
+    setRequestingCompletionId(null);
+
+    if (res.success) {
+      showToast('Completion requested! Waiting for passenger drop-off confirmation.', 'success');
+      if (res.ride) setActiveRide(res.ride);
+      pollDriverRides();
+    } else {
+      if (res.error?.includes('moving above 10 km/h') || res.error?.includes('speed')) {
+        showToast(`⚠️ Speed Check Failure: Please slow down below 10 km/h before completing. (${res.error})`, 'danger');
+      } else {
+        showToast(res.error || 'Failed to request completion', 'danger');
+      }
+    }
+  };
 
   // Load History Log
   const loadHistoryData = useCallback(async () => {
@@ -730,6 +807,111 @@ export const DriverDashboardView: React.FC = () => {
       {/* TAB 1: OVERVIEW HUB */}
       {activeTab === 'overview' && (
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* ACTIVE DRIVER TRIP CARD */}
+          {activeRide && (
+            <Card variant="elevated" style={{ borderWidth: 2, borderColor: colors.primary, marginBottom: spacing.md }}>
+              <CardHeader
+                title={`Active Driver Trip — ${activeRide.passengerPseudonym}`}
+                subtitle={`Ride ID: ${activeRide.rideId} • Status: ${activeRide.status}`}
+                action={<Badge label={activeRide.status} variant="info" />}
+              />
+              <CardBody style={{ gap: spacing.md }}>
+                <View style={styles.telemetryGrid}>
+                  <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                    <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Passenger Pseudonym</Text>
+                    <Text style={[styles.telemetryVal, { color: colors.primary }]}>{activeRide.passengerPseudonym}</Text>
+                  </View>
+                  <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                    <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Approximate Pickup</Text>
+                    <Text style={[styles.telemetryVal, { color: colors.textPrimary }]}>{activeRide.approximatePickupArea || 'Nearby'}</Text>
+                  </View>
+                  <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                    <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Destination</Text>
+                    <Text style={[styles.telemetryVal, { color: colors.textSecondary }]}>{activeRide.destinationText || 'Open'}</Text>
+                  </View>
+                </View>
+
+                {activeRide.status === 'ACCEPTED' && (
+                  <Button
+                    title="Start Trip Now"
+                    variant="primary"
+                    size="md"
+                    loading={startingRideId === activeRide.id}
+                    icon={<Icon name="play" size={16} color="#FFFFFF" />}
+                    onPress={() => handleStartRide(activeRide.id)}
+                  />
+                )}
+
+                {activeRide.status === 'ACTIVE' && (
+                  <View style={{ gap: spacing.xs }}>
+                    <Button
+                      title="Request Trip Completion (Speed Check <= 10 km/h)"
+                      variant="primary"
+                      size="md"
+                      loading={requestingCompletionId === activeRide.id}
+                      icon={<Icon name="check-square" size={16} color="#FFFFFF" />}
+                      onPress={() => handleRequestCompletion(activeRide.id)}
+                    />
+                    <Text style={{ fontSize: 11, color: colors.textMuted }}>
+                      ℹ️ Speed check requires vehicle speed to be ≤ 10 km/h before requesting completion.
+                    </Text>
+                  </View>
+                )}
+
+                {activeRide.status === 'WAITING_PASSENGER_CONFIRM' && (
+                  <View style={[styles.alertBanner, { backgroundColor: colors.warningSurface, borderColor: colors.warning }]}>
+                    <Icon name="clock" size={18} color={colors.warning} />
+                    <View style={styles.alertTextWrapper}>
+                      <Text style={[styles.alertTitle, { color: colors.warning }]}>Completion Requested</Text>
+                      <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>
+                        Waiting for passenger to confirm drop-off on their device.
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </CardBody>
+            </Card>
+          )}
+
+          {/* INCOMING PENDING RIDE DISPATCHES */}
+          {!activeRide && pendingRides.length > 0 && (
+            <Card variant="elevated" style={{ borderWidth: 2, borderColor: colors.warning, marginBottom: spacing.md }}>
+              <CardHeader
+                title={`Incoming Dispatch Requests (${pendingRides.length})`}
+                subtitle="15-second acceptance window • First-trigger-wins atomic assignment"
+                action={<Badge label="DISPATCH ALERT" variant="warning" />}
+              />
+              <CardBody style={{ gap: spacing.md }}>
+                {pendingRides.map((ride) => (
+                  <View key={ride.id} style={[styles.simBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                    <View style={styles.titleRow}>
+                      <Text style={[styles.simHeader, { color: colors.primary }]}>{ride.passengerPseudonym}</Text>
+                      <Badge label={`${ride.remainingSeconds || 15}s window`} variant="warning" />
+                    </View>
+                    <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                      Pickup Area: <Text style={{ fontWeight: '700', color: colors.textPrimary }}>{ride.approximatePickupArea}</Text>
+                    </Text>
+                    {ride.destinationText && (
+                      <Text style={{ fontSize: 13, color: colors.textSecondary }}>
+                        Destination: <Text style={{ fontWeight: '600' }}>{ride.destinationText}</Text>
+                      </Text>
+                    )}
+                    <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs }}>
+                      <Button
+                        title="ACCEPT RIDE"
+                        variant="primary"
+                        size="sm"
+                        loading={acceptingRideId === ride.id}
+                        icon={<Icon name="check" size={14} color="#FFFFFF" />}
+                        onPress={() => handleAcceptRide(ride.id)}
+                      />
+                    </View>
+                  </View>
+                ))}
+              </CardBody>
+            </Card>
+          )}
+
           {/* Multi-Layered Approval & Relationship Cards */}
           <View style={styles.statsGrid}>
             {/* Card 1: Admin Platform Approval */}

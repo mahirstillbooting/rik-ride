@@ -28,6 +28,7 @@ import {
   PendingQueueItem,
   AuditLogItem,
 } from '../services/adminService';
+import { clientRideService, RideData } from '../services/rideService';
 
 export const AdminDashboardView: React.FC = () => {
   const { colors, mode } = useTheme();
@@ -47,6 +48,7 @@ export const AdminDashboardView: React.FC = () => {
   const [vehiclesList, setVehiclesList] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [fleetLocations, setFleetLocations] = useState<{ drivers: any[]; passengers: any[] }>({ drivers: [], passengers: [] });
+  const [activeRidesList, setActiveRidesList] = useState<RideData[]>([]);
 
   // Filtering states
   const [pendingTypeFilter, setPendingTypeFilter] = useState<'ALL' | 'GARAGE' | 'USER' | 'VEHICLE'>('ALL');
@@ -70,16 +72,18 @@ export const AdminDashboardView: React.FC = () => {
     setErrorMsg(null);
     try {
       if (currentNavItem.id === 'admin-overview') {
-        const [statsRes, pendingRes, logsRes, locationsRes] = await Promise.all([
+        const [statsRes, pendingRes, logsRes, locationsRes, ridesRes] = await Promise.all([
           adminService.getStats(),
           adminService.getPendingQueue(),
           adminService.getAuditLogs(1, 10),
           adminService.getFleetAndPassengerLocations().catch(() => ({ drivers: [], passengers: [] })),
+          clientRideService.getAdminActiveRides().catch(() => ({ rides: [] })),
         ]);
         setStats(statsRes);
         setPendingQueue(pendingRes);
         setAuditLogs(logsRes);
         setFleetLocations(locationsRes);
+        setActiveRidesList(ridesRes.rides || []);
       } else if (currentNavItem.id === 'admin-approvals') {
         const queueRes = await adminService.getPendingQueue();
         setPendingQueue(queueRes);
@@ -264,6 +268,39 @@ export const AdminDashboardView: React.FC = () => {
                   driverMarkers={fleetLocations.drivers}
                   passengerMarkers={fleetLocations.passengers}
                 />
+
+                {/* Active Operational Rides Stream Card */}
+                <Card variant="default" style={styles.fullWidthCard}>
+                  <CardHeader
+                    title={`Active Operational Rides (${activeRidesList.length})`}
+                    subtitle="Real-time ride lifecycle monitoring across the platform"
+                    icon={<Icon name="navigation" size={18} color={colors.primary} />}
+                    action={<Badge label={`${activeRidesList.length} ACTIVE`} variant={activeRidesList.length > 0 ? 'success' : 'neutral'} />}
+                  />
+                  <CardBody>
+                    {activeRidesList.length === 0 ? (
+                      <EmptyState
+                        title="No Active Rides Currently"
+                        description="Active passenger ride requests and driver dispatches will appear here in real-time."
+                      />
+                    ) : (
+                      activeRidesList.map((ride) => (
+                        <View key={ride.id} style={[styles.logRow, { borderBottomColor: colors.borderSubtle }]}>
+                          <View style={styles.logMeta}>
+                            <Badge label={ride.passengerPseudonym} variant="info" />
+                            <Badge label={ride.status} variant={ride.status === 'ACTIVE' ? 'success' : 'warning'} />
+                            <Text style={[styles.logTime, { color: colors.textMuted }]}>
+                              Req: {new Date(ride.requestedAt).toLocaleTimeString()}
+                            </Text>
+                          </View>
+                          <Text style={[styles.logDetails, { color: colors.textPrimary }]}>
+                            Driver: {ride.driverId ? `${ride.driverId.name} (${ride.vehicleId?.shortVehicleNumber || 'Rickshaw'})` : 'Searching / Unassigned'} • Area: {ride.approximatePickupArea || 'N/A'}
+                          </Text>
+                        </View>
+                      ))
+                    )}
+                  </CardBody>
+                </Card>
 
                 {/* Recent Audit Stream Card */}
                 <Card variant="default" style={styles.fullWidthCard}>

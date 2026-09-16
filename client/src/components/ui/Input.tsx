@@ -36,7 +36,8 @@ export const Input: React.FC<InputProps> = ({
   const { colors } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
 
-  // Eliminate nested web browser focus ring/outline completely
+  // Eliminate web browser focus ring / outline / shadow completely
+  // Ensures ONE single visual container with NO outer focus rectangle
   const webInputStyle = Platform.OS === 'web'
     ? ({
         outlineStyle: 'none',
@@ -50,12 +51,9 @@ export const Input: React.FC<InputProps> = ({
     ? ({
         outlineStyle: 'none',
         outlineWidth: 0,
-        boxShadow: isFocused
-          ? error
-            ? `0 0 0 3px ${colors.danger}25`
-            : `0 0 0 3px ${colors.primary}25`
-          : 'none',
-        transition: 'border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out',
+        outlineColor: 'transparent',
+        boxShadow: 'none',
+        transition: 'border-color 0.15s ease-in-out, background-color 0.15s ease-in-out',
       } as any)
     : {};
 
@@ -75,6 +73,7 @@ export const Input: React.FC<InputProps> = ({
               : isFocused
               ? colors.primary
               : colors.border,
+            borderWidth: isFocused ? 1.5 : 1,
           },
           webWrapperStyle,
         ]}
@@ -117,7 +116,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   label: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     marginBottom: spacing.xs,
     letterSpacing: 0.2,
@@ -125,10 +124,9 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
     borderRadius: borderRadius.md,
     paddingHorizontal: spacing.md,
-    height: 46,
+    height: 44,
   },
   input: {
     flex: 1,
@@ -153,4 +151,3 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
 });
-

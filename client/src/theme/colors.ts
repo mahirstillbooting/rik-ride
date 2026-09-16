@@ -1,8 +1,8 @@
 /**
  * RIK-RIDE Design System Color Tokens
- * Unified Brand Identity: Black / Charcoal / Neutral Greys / Off-White / Vibrant Orange
- * STRICT RULE: ZERO BLUE OR BLUE-ADJACENT SHADES IN EITHER DARK OR LIGHT THEME.
- * STRICT RULE: NO DECORATIVE GREEN. GREEN ONLY FOR GENUINE SUCCESS / ACTIVE OPERATIONAL STATES.
+ * Unified Premium Identity: Black / Charcoal / Neutral Greys / Off-White / Vibrant Orange
+ * ABSOLUTE RULE: ZERO BLUE OR BLUE-ADJACENT SHADES IN EITHER DARK OR LIGHT THEME.
+ * ABSOLUTE RULE: NO DECORATIVE GREEN. GREEN ONLY FOR GENUINE SUCCESS / ACTIVE OPERATIONAL STATES.
  */
 
 export interface ThemeColors {
@@ -50,34 +50,34 @@ export interface ThemeColors {
 }
 
 export const darkColors: ThemeColors = {
-  background: '#090A0C',       // Matte near-black
-  surface: '#121417',          // Deep charcoal
-  surfaceElevated: '#181B1F',  // Dark graphite
-  surfaceHover: '#22262C',     // Slightly lighter charcoal hover
-  border: '#282C34',           // Clean neutral graphite border
-  borderSubtle: '#1F232B',
-  borderStrong: '#3A3F4B',
+  background: '#080808',       // Deepest matte black
+  surface: '#121212',          // Secondary charcoal surface
+  surfaceElevated: '#1A1A1A',  // Elevated graphite card surface
+  surfaceHover: '#242424',     // Graphite highlight hover state
+  border: 'rgba(255, 255, 255, 0.08)', // Subtle border
+  borderSubtle: 'rgba(255, 255, 255, 0.05)',
+  borderStrong: 'rgba(255, 255, 255, 0.14)',
 
-  textPrimary: '#F8FAFC',
-  textSecondary: '#9EA3AE',
-  textMuted: '#6C727F',
+  textPrimary: '#F5F5F5',
+  textSecondary: '#A1A1AA',
+  textMuted: '#71717A',
 
-  // Orange System Tokens
-  primary: '#F97316',          // Vibrant Orange
-  primaryHover: '#EA580C',     // Deep Orange
-  primaryLight: '#FB923C',     // Warm Amber Orange
-  primaryDark: '#C2410C',      // Dark Orange Accent
-  primaryMuted: 'rgba(249, 115, 22, 0.16)',
+  // Orange Brand System Tokens
+  primary: '#FF6A00',          // Vibrant Orange
+  primaryHover: '#FF7A1A',     // Primary Orange Hover
+  primaryLight: '#FF8A3D',     // Warm Accent Orange
+  primaryDark: '#D94F00',      // Deep Orange
+  primaryMuted: 'rgba(255, 106, 0, 0.14)',
   primaryForeground: '#FFFFFF',
-  primarySurface: 'rgba(249, 115, 22, 0.10)',
-  primaryBorder: 'rgba(249, 115, 22, 0.32)',
+  primarySurface: 'rgba(255, 106, 0, 0.10)',
+  primaryBorder: 'rgba(255, 106, 0, 0.30)',
 
-  accent: '#FB923C',
-  accentSurface: 'rgba(249, 115, 22, 0.14)',
-  accentGlow: 'rgba(249, 115, 22, 0.22)',
+  accent: '#FF8A3D',
+  accentSurface: 'rgba(255, 106, 0, 0.12)',
+  accentGlow: 'rgba(255, 106, 0, 0.20)',
 
-  cardHeroBg: '#161311',
-  cardHeroBorder: 'rgba(249, 115, 22, 0.35)',
+  cardHeroBg: '#14100D',
+  cardHeroBorder: 'rgba(255, 106, 0, 0.32)',
 
   success: '#10B981',          // Operational active / success ONLY
   successSurface: 'rgba(16, 185, 129, 0.12)',
@@ -85,39 +85,39 @@ export const darkColors: ThemeColors = {
   warningSurface: 'rgba(245, 158, 11, 0.12)',
   danger: '#EF4444',
   dangerSurface: 'rgba(239, 68, 68, 0.12)',
-  info: '#F97316',             // Standard info matches Orange
-  infoSurface: 'rgba(249, 115, 22, 0.14)',
+  info: '#FF6A00',             // Info matches Brand Orange
+  infoSurface: 'rgba(255, 106, 0, 0.12)',
 
-  overlay: 'rgba(9, 10, 12, 0.85)',
-  mapBg: '#111317',
+  overlay: 'rgba(8, 8, 8, 0.88)',
+  mapBg: '#0E0E0E',
 };
 
 export const lightColors: ThemeColors = {
-  background: '#FAFAFA',
-  surface: '#FFFFFF',
-  surfaceElevated: '#F4F4F5',
-  surfaceHover: '#EFEFF1',
+  background: '#F9F9FB',       // Warm neutral off-white
+  surface: '#FFFFFF',          // Crisp white surface
+  surfaceElevated: '#F4F4F5',  // Light grey elevated card surface
+  surfaceHover: '#E4E4E7',     // Light grey hover state
   border: '#E4E4E7',
   borderSubtle: '#F4F4F5',
   borderStrong: '#D4D4D8',
 
-  textPrimary: '#111315',
-  textSecondary: '#52525B',
-  textMuted: '#71717A',
+  textPrimary: '#18181B',       // Charcoal primary text
+  textSecondary: '#52525B',     // Dark grey secondary text
+  textMuted: '#71717A',        // Neutral grey muted text
 
-  // Orange System Tokens
-  primary: '#F97316',
+  // Orange Brand System Tokens
+  primary: '#FF6A00',
   primaryHover: '#EA580C',
-  primaryLight: '#FB923C',
-  primaryDark: '#C2410C',
-  primaryMuted: 'rgba(249, 115, 22, 0.12)',
+  primaryLight: '#FF8A3D',
+  primaryDark: '#D94F00',
+  primaryMuted: 'rgba(255, 106, 0, 0.10)',
   primaryForeground: '#FFFFFF',
-  primarySurface: 'rgba(249, 115, 22, 0.08)',
-  primaryBorder: 'rgba(249, 115, 22, 0.28)',
+  primarySurface: 'rgba(255, 106, 0, 0.08)',
+  primaryBorder: 'rgba(255, 106, 0, 0.26)',
 
-  accent: '#F97316',
-  accentSurface: 'rgba(249, 115, 22, 0.08)',
-  accentGlow: 'rgba(249, 115, 22, 0.15)',
+  accent: '#FF6A00',
+  accentSurface: 'rgba(255, 106, 0, 0.08)',
+  accentGlow: 'rgba(255, 106, 0, 0.15)',
 
   cardHeroBg: '#FFF7ED',
   cardHeroBorder: '#FFEDD5',
@@ -128,10 +128,9 @@ export const lightColors: ThemeColors = {
   warningSurface: 'rgba(217, 119, 6, 0.08)',
   danger: '#DC2626',
   dangerSurface: 'rgba(220, 38, 38, 0.08)',
-  info: '#F97316',
-  infoSurface: 'rgba(249, 115, 22, 0.08)',
+  info: '#FF6A00',
+  infoSurface: 'rgba(255, 106, 0, 0.08)',
 
-  overlay: 'rgba(17, 19, 21, 0.5)',
+  overlay: 'rgba(24, 24, 27, 0.55)',
   mapBg: '#F4F4F5',
 };
-

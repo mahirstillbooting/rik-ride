@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { Card, CardBody } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
+import { Icon } from '../components/ui/Icon';
 import { spacing, borderRadius } from '../theme/spacing';
 
 export const LoginView: React.FC = () => {
@@ -71,7 +72,7 @@ export const LoginView: React.FC = () => {
       <View style={styles.container}>
         {/* Brand Identity Header */}
         <View style={styles.brandHeader}>
-          <View style={[styles.brandBadge, { backgroundColor: colors.accentSurface, borderColor: colors.primary }]}>
+          <View style={[styles.brandBadge, { backgroundColor: colors.accentSurface, borderColor: colors.primaryBorder }]}>
             <View style={[styles.brandDot, { backgroundColor: colors.primary }]} />
             <Text style={[styles.brandBadgeText, { color: colors.primary }]}>RIK-RIDE PLATFORM</Text>
           </View>
@@ -89,14 +90,14 @@ export const LoginView: React.FC = () => {
           <CardBody style={styles.cardBody}>
             {errorMsg && (
               <View style={[styles.alertBox, { backgroundColor: colors.dangerSurface, borderColor: colors.danger }]}>
-                <Text style={styles.alertIcon}>⚠️</Text>
+                <Icon name="alert-triangle" size={16} color={colors.danger} />
                 <Text style={[styles.alertText, { color: colors.danger }]}>{errorMsg}</Text>
               </View>
             )}
 
             {seedNotice && (
               <View style={[styles.alertBox, { backgroundColor: colors.successSurface, borderColor: colors.success }]}>
-                <Text style={styles.alertIcon}>✅</Text>
+                <Icon name="check-circle" size={16} color={colors.success} />
                 <Text style={[styles.alertText, { color: colors.success }]}>{seedNotice}</Text>
               </View>
             )}
@@ -109,6 +110,7 @@ export const LoginView: React.FC = () => {
               autoCapitalize="none"
               keyboardType="email-address"
               autoComplete="username"
+              leftIcon={<Icon name="user" size={16} color={colors.textMuted} />}
             />
 
             <Input
@@ -119,14 +121,14 @@ export const LoginView: React.FC = () => {
               secureTextEntry={!showPassword}
               autoCapitalize="none"
               autoComplete="password"
+              leftIcon={<Icon name="lock" size={16} color={colors.textMuted} />}
               rightIcon={
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={styles.eyeBtn}
                 >
-                  <Text style={[styles.showPasswordText, { color: colors.primary }]}>
-                    {showPassword ? 'Hide' : 'Show'}
-                  </Text>
+                  <Icon name={showPassword ? 'eye-off' : 'eye'} size={16} color={colors.primary} />
                 </TouchableOpacity>
               }
             />
@@ -154,9 +156,12 @@ export const LoginView: React.FC = () => {
               onPress={() => setShowDevPanel(!showDevPanel)}
               style={styles.devToggleLink}
             >
-              <Text style={[styles.devToggleText, { color: colors.textMuted }]}>
-                {showDevPanel ? '▲ Hide Dev Utilities' : '⚙️ Dev Testing Panel'}
-              </Text>
+              <View style={styles.devToggleRow}>
+                <Icon name="settings" size={12} color={colors.textMuted} />
+                <Text style={[styles.devToggleText, { color: colors.textMuted }]}>
+                  {showDevPanel ? 'Hide Dev Utilities' : 'Dev Testing Panel'}
+                </Text>
+              </View>
             </TouchableOpacity>
           )}
 
@@ -168,43 +173,43 @@ export const LoginView: React.FC = () => {
               </Text>
               <View style={styles.devBtnGrid}>
                 <TouchableOpacity
-                  style={[styles.devBtn, { borderColor: colors.border }]}
+                  style={[styles.devBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
                   onPress={() => fillTestAccount('01700000005')}
                 >
                   <Text style={[styles.devBtnText, { color: colors.textPrimary }]}>Passenger</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.devBtn, { borderColor: colors.border }]}
+                  style={[styles.devBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
                   onPress={() => fillTestAccount('01700000004')}
                 >
                   <Text style={[styles.devBtnText, { color: colors.textPrimary }]}>Self Driver</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.devBtn, { borderColor: colors.border }]}
+                  style={[styles.devBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
                   onPress={() => fillTestAccount('01700000003')}
                 >
                   <Text style={[styles.devBtnText, { color: colors.textPrimary }]}>Garage Driver</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.devBtn, { borderColor: colors.border }]}
+                  style={[styles.devBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
                   onPress={() => fillTestAccount('01700000002')}
                 >
                   <Text style={[styles.devBtnText, { color: colors.textPrimary }]}>Garage Owner</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.devBtn, { borderColor: colors.border }]}
+                  style={[styles.devBtn, { borderColor: colors.primaryBorder, backgroundColor: colors.primarySurface }]}
                   onPress={() => fillTestAccount('01700000001')}
                 >
                   <Text style={[styles.devBtnText, { color: colors.primary }]}>Admin</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.devBtn, { borderColor: colors.warning }]}
+                  style={[styles.devBtn, { borderColor: colors.warning, backgroundColor: colors.warningSurface }]}
                   onPress={() => fillTestAccount('01700000006')}
                 >
                   <Text style={[styles.devBtnText, { color: colors.warning }]}>Pending</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.devBtn, { borderColor: colors.danger }]}
+                  style={[styles.devBtn, { borderColor: colors.danger, backgroundColor: colors.dangerSurface }]}
                   onPress={() => fillTestAccount('01700000007')}
                 >
                   <Text style={[styles.devBtnText, { color: colors.danger }]}>Suspended</Text>
@@ -212,9 +217,12 @@ export const LoginView: React.FC = () => {
               </View>
 
               <TouchableOpacity onPress={handleSeedDev} style={styles.devSeedBtn}>
-                <Text style={[styles.devSeedBtnText, { color: colors.primary }]}>
-                  ⚡ Seed DB Dev Accounts
-                </Text>
+                <View style={styles.devSeedRow}>
+                  <Icon name="zap" size={13} color={colors.primary} />
+                  <Text style={[styles.devSeedBtnText, { color: colors.primary }]}>
+                    Seed DB Dev Accounts
+                  </Text>
+                </View>
               </TouchableOpacity>
             </View>
           )}
@@ -244,8 +252,8 @@ const styles = StyleSheet.create({
   brandBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: 5,
     borderRadius: borderRadius.full,
     borderWidth: 1,
     marginBottom: spacing.sm,
@@ -279,7 +287,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...Platform.select({
       web: {
-        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.25)',
+        boxShadow: '0 8px 30px rgba(0, 0, 0, 0.35)',
       },
     }),
   },
@@ -298,10 +306,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.md,
     borderWidth: 1,
     marginBottom: spacing.xs,
-    gap: spacing.xs,
-  },
-  alertIcon: {
-    fontSize: 14,
+    gap: spacing.xs + 2,
   },
   alertText: {
     fontSize: 13,
@@ -309,9 +314,8 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 18,
   },
-  showPasswordText: {
-    fontSize: 12,
-    fontWeight: '700',
+  eyeBtn: {
+    padding: 4,
   },
   signInButton: {
     marginTop: spacing.xs,
@@ -328,6 +332,11 @@ const styles = StyleSheet.create({
   devToggleLink: {
     marginTop: spacing.md,
     paddingVertical: spacing.xs,
+  },
+  devToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   devToggleText: {
     fontSize: 11,
@@ -355,8 +364,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   devBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: borderRadius.sm,
     borderWidth: 1,
   },
@@ -367,6 +376,11 @@ const styles = StyleSheet.create({
   devSeedBtn: {
     marginTop: spacing.xs,
     paddingVertical: 4,
+  },
+  devSeedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   devSeedBtnText: {
     fontSize: 12,

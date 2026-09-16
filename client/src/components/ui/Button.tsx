@@ -94,7 +94,10 @@ export const Button: React.FC<ButtonProps> = ({
   const webButtonStyle = Platform.OS === 'web'
     ? {
         cursor: disabled || loading ? 'not-allowed' : 'pointer',
-        transition: 'background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, transform 0.1s ease-in-out',
+        outlineStyle: 'none',
+        outlineWidth: 0,
+        outlineColor: 'transparent',
+        transition: 'background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, opacity 0.15s ease-in-out',
       }
     : {};
 

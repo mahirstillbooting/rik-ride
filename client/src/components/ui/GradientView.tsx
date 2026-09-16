@@ -35,14 +35,14 @@ export const GradientView: React.FC<GradientViewProps> = ({
     if (mode === 'dark') {
       switch (preset) {
         case 'darkHero':
-          return ['#090A0C', '#121417'];
+          return ['#080808', '#121212'];
         case 'accentHero':
-          return ['#121417', 'rgba(249, 115, 22, 0.12)'];
+          return ['#121212', 'rgba(255, 106, 0, 0.12)'];
         case 'orangeHighlight':
-          return ['#F97316', '#EA580C'];
+          return ['#FF6A00', '#D94F00'];
         case 'charcoalElevated':
         default:
-          return ['#121417', '#181B1F'];
+          return ['#121212', '#1A1A1A'];
       }
     } else {
       switch (preset) {
@@ -50,7 +50,7 @@ export const GradientView: React.FC<GradientViewProps> = ({
         case 'accentHero':
           return ['#FFF7ED', '#FFFFFF'];
         case 'orangeHighlight':
-          return ['#F97316', '#EA580C'];
+          return ['#FF6A00', '#D94F00'];
         case 'charcoalElevated':
         default:
           return ['#FFFFFF', '#F4F4F5'];

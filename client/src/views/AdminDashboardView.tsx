@@ -635,7 +635,10 @@ export const AdminDashboardView: React.FC = () => {
                   <CardBody style={styles.placeholderBody}>
                     <View style={styles.placeholderGrid}>
                       <View style={[styles.placeholderCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.warning }]}>
-                        <Text style={[styles.placeholderTitle, { color: colors.warning }]}>⚠️ Yellow Safety Alerts</Text>
+                        <View style={styles.alertHeaderRow}>
+                          <Icon name="alert-triangle" size={14} color={colors.warning} />
+                          <Text style={[styles.placeholderTitle, { color: colors.warning }]}>Yellow Safety Alerts</Text>
+                        </View>
                         <Text style={[styles.placeholderValue, { color: colors.textPrimary }]}>0 Active</Text>
                         <Text style={[styles.placeholderDesc, { color: colors.textMuted }]}>
                           Trip delay anomalies, prolonged stop warnings, and route deviation events.
@@ -643,7 +646,10 @@ export const AdminDashboardView: React.FC = () => {
                       </View>
 
                       <View style={[styles.placeholderCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.danger }]}>
-                        <Text style={[styles.placeholderTitle, { color: colors.danger }]}>🚨 Red SOS Panic Events</Text>
+                        <View style={styles.alertHeaderRow}>
+                          <Icon name="shield" size={14} color={colors.danger} />
+                          <Text style={[styles.placeholderTitle, { color: colors.danger }]}>Red SOS Panic Events</Text>
+                        </View>
                         <Text style={[styles.placeholderValue, { color: colors.textPrimary }]}>0 Active</Text>
                         <Text style={[styles.placeholderDesc, { color: colors.textMuted }]}>
                           Emergency passenger/driver SOS triggers and high-priority safety escalations.
@@ -896,6 +902,11 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: borderRadius.md,
     borderWidth: 1,
+    gap: spacing.xs,
+  },
+  alertHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.xs,
   },
   placeholderTitle: {

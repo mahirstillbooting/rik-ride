@@ -23,6 +23,9 @@ export type IconName =
   | 'map-pin'
   | 'plus'
   | 'chevron-right'
+  | 'chevron-left'
+  | 'chevron-down'
+  | 'chevron-up'
   | 'lock'
   | 'eye'
   | 'eye-off'
@@ -44,7 +47,14 @@ export type IconName =
   | 'help-circle'
   | 'bar-chart'
   | 'location-outline'
-  | 'layers';
+  | 'layers'
+  | 'edit'
+  | 'slash'
+  | 'power'
+  | 'user-check'
+  | 'user-plus'
+  | 'check-circle'
+  | 'activity';
 
 export interface IconProps {
   name: IconName | string;
@@ -79,6 +89,9 @@ export const Icon: React.FC<IconProps> = ({ name, size = 18, color, style }) => 
     case 'map-pin':
     case 'plus':
     case 'chevron-right':
+    case 'chevron-left':
+    case 'chevron-down':
+    case 'chevron-up':
     case 'lock':
     case 'eye':
     case 'eye-off':
@@ -100,6 +113,13 @@ export const Icon: React.FC<IconProps> = ({ name, size = 18, color, style }) => 
     case 'help-circle':
     case 'bar-chart':
     case 'layers':
+    case 'edit':
+    case 'slash':
+    case 'power':
+    case 'user-check':
+    case 'user-plus':
+    case 'check-circle':
+    case 'activity':
       return <Feather name={name as any} size={size} color={iconColor} style={style} />;
     case 'location-outline':
       return <Ionicons name="location-outline" size={size} color={iconColor} style={style} />;

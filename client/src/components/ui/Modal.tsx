@@ -10,6 +10,8 @@ import {
 import { useTheme } from '../../theme/ThemeContext';
 import { borderRadius, spacing, shadows } from '../../theme/spacing';
 
+import { Icon } from './Icon';
+
 export interface ModalProps {
   visible: boolean;
   onClose: () => void;
@@ -57,7 +59,7 @@ export const Modal: React.FC<ModalProps> = ({
             <View style={[styles.header, { borderBottomColor: colors.borderSubtle }]}>
               <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
               <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Text style={[styles.closeIcon, { color: colors.textMuted }]}>✕</Text>
+                <Icon name="x" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
           )}

@@ -11,6 +11,8 @@ import {
 import { useTheme } from '../../theme/ThemeContext';
 import { borderRadius, spacing, shadows } from '../../theme/spacing';
 
+import { Icon } from './Icon';
+
 export interface SelectOption {
   label: string;
   value: string;
@@ -63,7 +65,7 @@ export const Select: React.FC<SelectProps> = ({
         >
           {selectedOption ? selectedOption.label : placeholder}
         </Text>
-        <Text style={{ color: colors.textMuted }}>▼</Text>
+        <Icon name="chevron-down" size={14} color={colors.textMuted} />
       </TouchableOpacity>
 
       <Modal

@@ -10,6 +10,7 @@ import adminRoutes from './routes/adminRoutes';
 import garageRoutes from './routes/garageRoutes';
 import driverRoutes from './routes/driverRoutes';
 import locationRoutes from './routes/locationRoutes';
+import passengerLocationRoutes from './routes/passengerLocationRoutes';
 
 validateEnv();
 
@@ -25,6 +26,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/garage', garageRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/driver/location', locationRoutes);
+app.use('/api/passenger/location', passengerLocationRoutes);
 
 // Health & Verification Endpoint
 app.get('/api/health', (_req, res) => {

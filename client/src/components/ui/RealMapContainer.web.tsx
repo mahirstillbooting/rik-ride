@@ -5,6 +5,16 @@ import { borderRadius, spacing } from '../../theme/spacing';
 import { Icon } from './Icon';
 import { Badge } from './Badge';
 
+export interface MapMarkerItem {
+  id: string;
+  type: 'DRIVER' | 'PASSENGER';
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  label: string;
+  sublabel: string;
+}
+
 export interface RealMapContainerProps {
   latitude?: number;
   longitude?: number;
@@ -15,6 +25,8 @@ export interface RealMapContainerProps {
   height?: number | string;
   onRecenter?: () => void;
   allowExpand?: boolean;
+  driverMarkers?: MapMarkerItem[];
+  passengerMarkers?: MapMarkerItem[];
 }
 
 export const RealMapContainer: React.FC<RealMapContainerProps> = ({
@@ -26,6 +38,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   subtitle = 'Device GPS Synchronized',
   height = 360,
   allowExpand = true,
+  driverMarkers = [],
+  passengerMarkers = [],
 }) => {
   const { colors, mode } = useTheme();
 

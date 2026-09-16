@@ -46,6 +46,7 @@ export const AdminDashboardView: React.FC = () => {
   const [driversList, setDriversList] = useState<any[]>([]);
   const [vehiclesList, setVehiclesList] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [fleetLocations, setFleetLocations] = useState<{ drivers: any[]; passengers: any[] }>({ drivers: [], passengers: [] });
 
   // Filtering states
   const [pendingTypeFilter, setPendingTypeFilter] = useState<'ALL' | 'GARAGE' | 'USER' | 'VEHICLE'>('ALL');
@@ -69,14 +70,16 @@ export const AdminDashboardView: React.FC = () => {
     setErrorMsg(null);
     try {
       if (currentNavItem.id === 'admin-overview') {
-        const [statsRes, pendingRes, logsRes] = await Promise.all([
+        const [statsRes, pendingRes, logsRes, locationsRes] = await Promise.all([
           adminService.getStats(),
           adminService.getPendingQueue(),
           adminService.getAuditLogs(1, 10),
+          adminService.getFleetAndPassengerLocations().catch(() => ({ drivers: [], passengers: [] })),
         ]);
         setStats(statsRes);
         setPendingQueue(pendingRes);
         setAuditLogs(logsRes);
+        setFleetLocations(locationsRes);
       } else if (currentNavItem.id === 'admin-approvals') {
         const queueRes = await adminService.getPendingQueue();
         setPendingQueue(queueRes);
@@ -257,7 +260,9 @@ export const AdminDashboardView: React.FC = () => {
                 <MapContainer
                   height={340}
                   title="Dhaka GeoTelemetry Command Center"
-                  subtitle="Live Device GPS & Fleet Position Telemetry"
+                  subtitle="Live Device GPS, Active Fleet & Passenger Telemetry Stream"
+                  driverMarkers={fleetLocations.drivers}
+                  passengerMarkers={fleetLocations.passengers}
                 />
 
                 {/* Recent Audit Stream Card */}

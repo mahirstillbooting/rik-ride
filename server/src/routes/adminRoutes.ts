@@ -4,6 +4,7 @@ import { User, AccountStatus, UserRole } from '../models/User';
 import { Garage, VerificationStatus } from '../models/Garage';
 import { Vehicle, VehicleVerificationStatus } from '../models/Vehicle';
 import { auditService } from '../services/auditService';
+import { passengerLocationService } from '../services/passengerLocationService';
 
 const router = Router();
 
@@ -348,6 +349,19 @@ router.get('/audit-logs', async (req: AuthenticatedRequest, res: Response): Prom
     res.json({ success: true, ...result });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to fetch audit logs', details: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/locations
+ * Fetch real-time active driver and active passenger locations for authorized Admin monitoring
+ */
+router.get('/locations', async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const locations = await passengerLocationService.getActiveFleetAndPassengerLocations();
+    res.json(locations);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to fetch active fleet and passenger locations', details: error.message });
   }
 });
 

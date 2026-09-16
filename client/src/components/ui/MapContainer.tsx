@@ -24,6 +24,16 @@ export interface RickshawMarker {
   lng: number;
 }
 
+export interface MapMarkerItem {
+  id: string;
+  type: 'DRIVER' | 'PASSENGER';
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  label: string;
+  sublabel: string;
+}
+
 export interface MapContainerProps {
   height?: number | string;
   title?: string;
@@ -36,6 +46,8 @@ export interface MapContainerProps {
   accuracy?: number;
   status?: string;
   allowExpand?: boolean;
+  driverMarkers?: MapMarkerItem[];
+  passengerMarkers?: MapMarkerItem[];
 }
 
 export const MapContainer: React.FC<MapContainerProps> = ({
@@ -50,6 +62,8 @@ export const MapContainer: React.FC<MapContainerProps> = ({
   accuracy,
   status,
   allowExpand = true,
+  driverMarkers,
+  passengerMarkers,
 }) => {
   const { colors, mode } = useTheme();
   const [selectedMarker, setSelectedMarker] = useState<RickshawMarker | null>(null);
@@ -61,11 +75,13 @@ export const MapContainer: React.FC<MapContainerProps> = ({
         height={height}
         title={title}
         subtitle={subtitle}
-        latitude={latitude ?? (propMarkers && propMarkers[0] ? propMarkers[0].lat : 23.8103)}
-        longitude={longitude ?? (propMarkers && propMarkers[0] ? propMarkers[0].lng : 90.4125)}
+        latitude={latitude ?? (propMarkers && propMarkers[0] ? propMarkers[0].lat : undefined)}
+        longitude={longitude ?? (propMarkers && propMarkers[0] ? propMarkers[0].lng : undefined)}
         accuracy={accuracy}
         status={status || 'LOCATION_ACTIVE'}
         allowExpand={allowExpand}
+        driverMarkers={driverMarkers}
+        passengerMarkers={passengerMarkers}
       />
     );
   }

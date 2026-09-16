@@ -132,4 +132,15 @@ export const adminService = {
     const data = await authFetch(`/api/admin/audit-logs?page=${page}&limit=${limit}`);
     return data.logs || [];
   },
+
+  async getFleetAndPassengerLocations(): Promise<{
+    drivers: Array<{ id: string; type: string; lat: number; lng: number; accuracy?: number; label: string; sublabel: string }>;
+    passengers: Array<{ id: string; type: string; lat: number; lng: number; accuracy?: number; label: string; sublabel: string }>;
+  }> {
+    const data = await authFetch('/api/admin/locations');
+    return {
+      drivers: data.drivers || [],
+      passengers: data.passengers || [],
+    };
+  },
 };

@@ -11,3 +11,5 @@ export * from './Rating';
 export * from './SettlementRecord';
 export * from './Notification';
 export * from './AuditRecord';
+export * from './DriverLocation';
+export * from './PassengerLocation';

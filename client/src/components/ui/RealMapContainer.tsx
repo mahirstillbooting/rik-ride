@@ -14,6 +14,8 @@ export interface RealMapContainerProps {
   height?: number | string;
   onRecenter?: () => void;
   allowExpand?: boolean;
+  driverMarkers?: any[];
+  passengerMarkers?: any[];
   style?: StyleProp<ViewStyle>;
 }
 

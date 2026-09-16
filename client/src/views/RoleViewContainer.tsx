@@ -17,6 +17,7 @@ import { spacing, borderRadius } from '../theme/spacing';
 import { AdminDashboardView } from './AdminDashboardView';
 import { GarageDashboardView } from './GarageDashboardView';
 import { DriverDashboardView } from './DriverDashboardView';
+import { PassengerDashboardView } from './PassengerDashboardView';
 
 export const RoleViewContainer: React.FC = () => {
   const { colors } = useTheme();
@@ -46,6 +47,11 @@ export const RoleViewContainer: React.FC = () => {
     user?.role === 'DRIVER'
   ) {
     return <DriverDashboardView />;
+  }
+
+  // Render Passenger Dashboard View when active role is PASSENGER
+  if (currentRoleConfig.role === 'PASSENGER' || user?.role === 'PASSENGER') {
+    return <PassengerDashboardView />;
   }
 
   return (

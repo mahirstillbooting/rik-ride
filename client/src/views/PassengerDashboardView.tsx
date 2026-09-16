@@ -12,7 +12,7 @@ import { ErrorState } from '../components/ui/ErrorState';
 import { Icon } from '../components/ui/Icon';
 import { RealMapContainer } from '../components/ui/RealMapContainer';
 import { spacing, borderRadius } from '../theme/spacing';
-import { passengerLocationApiService } from '../services/passengerLocationService';
+import { passengerLocationApiService, NearbyRickshaw } from '../services/passengerLocationService';
 import { SharingStatus } from '../services/locationService';
 import { clientRideService, RideData } from '../services/rideService';
 
@@ -38,6 +38,9 @@ export const PassengerDashboardView: React.FC = () => {
   } | null>(null);
   const [lastUpdateTs, setLastUpdateTs] = useState<Date | null>(null);
 
+  // Discovery Radar States
+  const [nearbyRickshaws, setNearbyRickshaws] = useState<NearbyRickshaw[]>([]);
+
   // Dev Location Simulator States
   const [showSimPanel, setShowSimPanel] = useState(false);
   const [simLat, setSimLat] = useState('23.8103');
@@ -53,7 +56,6 @@ export const PassengerDashboardView: React.FC = () => {
   // Tracking refs
   const watchIdRef = useRef<number | null>(null);
   const lastSentTsRef = useRef<number>(0);
-  const autoSimIntervalRef = useRef<any>(null);
 
   // Sync initial location status from backend
   const syncLocationStatus = useCallback(async () => {
@@ -78,26 +80,40 @@ export const PassengerDashboardView: React.FC = () => {
     }
   }, []);
 
+  // Poll nearby available rickshaws for Discovery Radar (every 5 seconds)
+  const fetchNearbyRickshaws = useCallback(async () => {
+    const lat = currentLoc?.latitude;
+    const lng = currentLoc?.longitude;
+    const res = await passengerLocationApiService.getNearbyAvailableRickshaws(lat, lng, 2);
+    if (res.success && res.rickshaws) {
+      setNearbyRickshaws(res.rickshaws);
+    }
+  }, [currentLoc]);
+
   useEffect(() => {
     syncLocationStatus();
     pollActiveRide();
+    fetchNearbyRickshaws();
 
-    // Poll active ride every 3 seconds
     const rideInterval = setInterval(() => {
       pollActiveRide();
     }, 3000);
 
-    return () => clearInterval(rideInterval);
-  }, [syncLocationStatus, pollActiveRide]);
+    const radarInterval = setInterval(() => {
+      fetchNearbyRickshaws();
+    }, 5000);
+
+    return () => {
+      clearInterval(rideInterval);
+      clearInterval(radarInterval);
+    };
+  }, [syncLocationStatus, pollActiveRide, fetchNearbyRickshaws]);
 
   // Cleanup location tracking on unmount
   useEffect(() => {
     return () => {
       if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
         navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-      if (autoSimIntervalRef.current) {
-        clearInterval(autoSimIntervalRef.current);
       }
     };
   }, []);
@@ -235,7 +251,7 @@ export const PassengerDashboardView: React.FC = () => {
   // Create Ride Request
   const handleRequestRide = async () => {
     if (!currentLoc) {
-      showToast('Current location required. Please start GPS or send simulated location first.', 'warning');
+      showToast('Current location required. Please start GPS or set simulated location below first.', 'warning');
       return;
     }
 
@@ -323,7 +339,55 @@ export const PassengerDashboardView: React.FC = () => {
         </View>
       </View>
 
-      {/* RIDE DISPATCH & LIFECYCLE SECTION */}
+      {/* PRIMARY FEATURE: PASSENGER DISCOVERY RADAR MAP CARD */}
+      <Card variant="elevated" style={styles.radarCard}>
+        <CardHeader
+          title="Passenger Discovery Radar"
+          subtitle={
+            currentLoc
+              ? `Live Dhaka sector radar • Searching within 2 km of your current position`
+              : 'Live Dhaka sector radar • Displaying all available operational rickshaws'
+          }
+          action={
+            <Badge
+              label={`${nearbyRickshaws.length} AVAILABLE`}
+              variant={nearbyRickshaws.length > 0 ? 'success' : 'neutral'}
+            />
+          }
+        />
+        <CardBody style={styles.radarBody}>
+          {/* Non-blocking Location Notice when GPS is off */}
+          {!currentLoc && (
+            <View style={[styles.compactNoticeBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+              <Icon name="info" size={16} color={colors.primary} />
+              <Text style={[styles.compactNoticeText, { color: colors.textSecondary }]}>
+                Live GPS is currently off. Showing general Dhaka sector rickshaws. Tap{' '}
+                <Text style={{ fontWeight: '700', color: colors.primary }}>Start Location Sharing</Text> below to refine radar radius to 2 km.
+              </Text>
+            </View>
+          )}
+
+          {/* Real Interactive Discovery Map */}
+          <RealMapContainer
+            latitude={currentLoc?.latitude ?? 23.8103}
+            longitude={currentLoc?.longitude ?? 90.4125}
+            accuracy={currentLoc?.accuracy}
+            status={sharingStatus}
+            title="Dhaka Electric Rickshaw Discovery Radar"
+            subtitle={
+              currentLoc
+                ? `Position: [${currentLoc.latitude.toFixed(4)}, ${currentLoc.longitude.toFixed(4)}] • 2 km Radius Stream`
+                : 'Showing Available Operational Rickshaws across Dhaka Sector'
+            }
+            height={420}
+            allowExpand={true}
+            rickshawMarkers={nearbyRickshaws}
+            isPassengerView={true}
+          />
+        </CardBody>
+      </Card>
+
+      {/* RIDE LIFECYCLE SECTION: ACTIVE TRIP OR OPTIONAL RIDE REQUEST CARD */}
       {activeRide ? (
         <Card variant="elevated" style={[styles.activeRideCard, { borderColor: colors.primary }]}>
           <CardHeader
@@ -337,7 +401,7 @@ export const PassengerDashboardView: React.FC = () => {
             }
           />
           <CardBody style={styles.activeRideBody}>
-            {/* Status-specific Alerts */}
+            {/* Status Alerts */}
             {activeRide.status === 'INITIATED' && (
               <View style={[styles.alertBanner, { backgroundColor: colors.warningSurface, borderColor: colors.warning }]}>
                 <Icon name="clock" size={20} color={colors.warning} />
@@ -415,7 +479,7 @@ export const PassengerDashboardView: React.FC = () => {
               </View>
             </View>
 
-            {/* Confirmation Button for WAITING_PASSENGER_CONFIRM or ACTIVE */}
+            {/* Confirmation Button */}
             {(activeRide.status === 'WAITING_PASSENGER_CONFIRM' || activeRide.status === 'ACTIVE') && (
               <View style={{ marginTop: spacing.sm }}>
                 <Button
@@ -431,16 +495,16 @@ export const PassengerDashboardView: React.FC = () => {
           </CardBody>
         </Card>
       ) : (
-        /* Ride Request Panel */
+        /* Optional Ride Request Panel */
         <Card variant="elevated" style={styles.requestCard}>
           <CardHeader
             title="Request an Electric Rickshaw"
-            subtitle="Broadcast ride request with current device GPS coordinates"
-            action={<Badge label="READY" variant="success" />}
+            subtitle="Broadcast ride request to nearby discovered rickshaws"
+            action={<Badge label="ACTION CARD" variant="info" />}
           />
           <CardBody style={styles.requestBody}>
             <Input
-              label="Destination (Optional description)"
+              label="Destination Reference (Optional landmark description)"
               placeholder="e.g. Gulshan-2 Circle, Dhanmondi 27, Banani Block 11..."
               value={destinationText}
               onChangeText={setDestinationText}
@@ -458,7 +522,7 @@ export const PassengerDashboardView: React.FC = () => {
               />
               {!currentLoc && (
                 <Text style={[styles.locWarning, { color: colors.warning }]}>
-                  ⚠️ Please start Live GPS or set simulated location below first.
+                  ℹ️ Enable Live Location Sharing below to request a ride to your location.
                 </Text>
               )}
             </View>
@@ -469,8 +533,8 @@ export const PassengerDashboardView: React.FC = () => {
       {/* Live GPS Telemetry & Location Sharing Control Panel */}
       <Card variant="elevated" style={styles.locationPanel}>
         <CardHeader
-          title="Passenger Live Location Sharing"
-          subtitle="Secure browser/device GPS ingestion foundation for authenticated passengers"
+          title="Passenger Live Location Sharing & GPS Settings"
+          subtitle="Secure device GPS ingestion foundation for authenticated passengers"
           action={
             <Badge
               label={sharingStatus.replace('_', ' ')}
@@ -517,17 +581,6 @@ export const PassengerDashboardView: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Alert Banner for Errors */}
-          {locationError && (
-            <View style={[styles.alertBanner, { backgroundColor: colors.dangerSurface, borderColor: colors.danger }]}>
-              <Icon name="alert-triangle" size={18} color={colors.danger} />
-              <View style={styles.alertTextWrapper}>
-                <Text style={[styles.alertTitle, { color: colors.danger }]}>GPS Telemetry Status Notice</Text>
-                <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>{locationError}</Text>
-              </View>
-            </View>
-          )}
-
           {/* Active Telemetry Metrics Grid */}
           <View style={styles.telemetryGrid}>
             <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
@@ -562,24 +615,6 @@ export const PassengerDashboardView: React.FC = () => {
                 {lastUpdateTs ? lastUpdateTs.toLocaleTimeString() : 'No updates'}
               </Text>
             </View>
-          </View>
-
-          {/* Real Interactive Map Canvas */}
-          <View style={{ marginTop: spacing.sm }}>
-            <RealMapContainer
-              latitude={currentLoc?.latitude}
-              longitude={currentLoc?.longitude}
-              accuracy={currentLoc?.accuracy}
-              status={sharingStatus}
-              title="Passenger Device GPS Location Map"
-              subtitle={
-                isSharing
-                  ? `Live Telemetry via ${currentLoc?.source || 'DEVICE_GPS'} • Synchronized`
-                  : 'Location Sharing Inactive — Tap "Start Location Sharing" to enable stream'
-              }
-              height={360}
-              allowExpand={true}
-            />
           </View>
 
           {/* Dev Location Simulator Panel */}
@@ -688,6 +723,26 @@ const styles = StyleSheet.create({
   },
   passengerSub: {
     fontSize: 13,
+  },
+  radarCard: {
+    width: '100%',
+  },
+  radarBody: {
+    gap: spacing.sm,
+  },
+  compactNoticeBar: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  compactNoticeText: {
+    fontSize: 12,
+    flex: 1,
   },
   requestCard: {
     width: '100%',

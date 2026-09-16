@@ -86,9 +86,9 @@ export const darkColors: ThemeColors = {
   cardHeroBg: '#16171C',
   cardHeroBorder: 'rgba(223, 255, 0, 0.25)',
 
-  // Semantic Status Tokens
-  success: '#10B981',          // Active operational state
-  successSurface: 'rgba(16, 185, 129, 0.12)',
+  // Semantic Status Tokens (ZERO GREEN — Neutral Slate, Dark Gray & Subtle Orange)
+  success: '#FF7043',          // Subtle Warm Orange active state
+  successSurface: 'rgba(255, 112, 67, 0.12)',
   warning: '#FF5722',          // Dark Orange / Coral alert accent
   warningSurface: 'rgba(255, 87, 34, 0.12)',
   danger: '#FF5722',           // Dark Orange / Coral destructive action
@@ -130,8 +130,8 @@ export const lightColors: ThemeColors = {
   cardHeroBg: '#F1F3F5',
   cardHeroBorder: '#DEE2E6',
 
-  success: '#059669',
-  successSurface: 'rgba(5, 150, 105, 0.08)',
+  success: '#E64A19',
+  successSurface: 'rgba(230, 74, 25, 0.08)',
   warning: '#E64A19',
   warningSurface: 'rgba(230, 74, 25, 0.08)',
   danger: '#E64A19',

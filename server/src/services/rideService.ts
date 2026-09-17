@@ -18,7 +18,152 @@ export interface RideRequestPayload {
   targetDriverId?: string;
 }
 
+export const MIN_ROUTE_DISTANCE_METERS = 15; // Minimum distance from last persisted point (15 meters)
+export const MIN_HEADING_CHANGE_DEG = 25; // Minimum heading change for turn detection (25 degrees)
+export const MIN_TURN_DISTANCE_METERS = 8; // Minimum distance required to record a turn (8 meters)
+export const MAX_TIME_WITHOUT_UPDATE_MS = 30 * 1000; // Time threshold to persist point during movement (30 seconds)
+export const MIN_TIME_DISTANCE_METERS = 5; // Minimum movement required even if 30s elapsed (5 meters)
+export const MAX_GPS_ACCURACY_METERS = 30; // Max allowed GPS inaccuracy threshold (30 meters)
+export const MAX_ROUTE_POINTS_PER_RIDE = 500; // Hard cap boundary to protect MongoDB document size limits
+
 export class RideService {
+  /**
+   * Helper: Calculate Haversine distance in meters between two lat/lng points
+   */
+  public calculateHaversineDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371000; // Earth radius in meters
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  /**
+   * Process & filter incoming driver GPS frame for active ride route history
+   * Deterministic Filtering Strategy:
+   * 1. Accuracy Filter: Ignores GPS readings > 30 meters accuracy.
+   * 2. First Point: Start point persisted immediately.
+   * 3. Distance Threshold: Persists if distance >= 15m from last point.
+   * 4. Heading/Turn Threshold: Persists if heading change >= 25 deg AND distance >= 8m.
+   * 5. Time Threshold: Persists if time elapsed >= 30s AND distance >= 5m.
+   * 6. Stationary Noise Suppression: Ignores micro-drift < 5m when stationary.
+   * 7. Duplicate/Out-of-Order: Rejects incoming timestamp <= last point timestamp.
+   * 8. Max Safety Boundary: Caps routePoints array at 500 points (~20 KB max).
+   */
+  public async processActiveRideTelemetry(driverId: string, payload: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    speed?: number;
+    heading?: number;
+    timestamp?: Date | string;
+  }) {
+    // 1. Accuracy Filter
+    if (payload.accuracy !== undefined && payload.accuracy > MAX_GPS_ACCURACY_METERS) {
+      return { persisted: false, reason: `Accuracy [${payload.accuracy}m] exceeds max threshold [${MAX_GPS_ACCURACY_METERS}m]` };
+    }
+
+    // 2. Find active ride for driver
+    const ride = await Ride.findOne({
+      driverId,
+      status: 'ACTIVE',
+    });
+
+    if (!ride) {
+      return { persisted: false, reason: 'No active ride found for driver.' };
+    }
+
+    const incomingTs = payload.timestamp ? new Date(payload.timestamp) : new Date();
+    if (isNaN(incomingTs.getTime())) return { persisted: false, error: 'Invalid timestamp' };
+
+    const routePoints = ride.routePoints || [];
+
+    // Rule 1: First point (start of active trip) -> Persist immediately
+    if (routePoints.length === 0) {
+      const startPoint = {
+        coordinates: [payload.longitude, payload.latitude] as [number, number],
+        timestamp: incomingTs,
+        accuracy: payload.accuracy,
+        speed: payload.speed,
+        heading: payload.heading,
+      };
+      ride.routePoints = [startPoint];
+      ride.routePointCount = 1;
+      ride.distanceMeters = 0;
+      await ride.save();
+      return { persisted: true, reason: 'Trip start point persisted', routePointCount: 1, distanceMeters: 0 };
+    }
+
+    // Rule 8: Safety boundary cap
+    if (routePoints.length >= MAX_ROUTE_POINTS_PER_RIDE) {
+      return { persisted: false, reason: 'Max route points safety cap reached (500 points max)' };
+    }
+
+    const lastPoint = routePoints[routePoints.length - 1];
+    const lastLng = lastPoint.coordinates[0];
+    const lastLat = lastPoint.coordinates[1];
+
+    // Rule 7: Duplicate / Out-of-order timestamp protection
+    const lastTs = new Date(lastPoint.timestamp).getTime();
+    if (incomingTs.getTime() <= lastTs) {
+      return { persisted: false, reason: 'Out-of-order or duplicate timestamp rejected' };
+    }
+
+    // Calculate distance from last persisted point
+    const distMeters = this.calculateHaversineDistanceMeters(lastLat, lastLng, payload.latitude, payload.longitude);
+
+    // Rule 6: Stationary noise filter -> Ignore micro-drift < 5 meters
+    if (distMeters < 5) {
+      return { persisted: false, reason: 'Stationary GPS noise filtered (< 5m)' };
+    }
+
+    // Check heading change for turn detection
+    let headingDiff = 0;
+    if (payload.heading !== undefined && lastPoint.heading !== undefined) {
+      headingDiff = Math.abs(payload.heading - lastPoint.heading);
+      if (headingDiff > 180) headingDiff = 360 - headingDiff;
+    }
+
+    const timeDiffMs = incomingTs.getTime() - lastTs;
+
+    // Evaluate Deterministic Filtering Criteria
+    const isSignificantMove = distMeters >= MIN_ROUTE_DISTANCE_METERS;
+    const isSignificantTurn = headingDiff >= MIN_HEADING_CHANGE_DEG && distMeters >= MIN_TURN_DISTANCE_METERS;
+    const isTimeThresholdMet = timeDiffMs >= MAX_TIME_WITHOUT_UPDATE_MS && distMeters >= MIN_TIME_DISTANCE_METERS;
+
+    if (!isSignificantMove && !isSignificantTurn && !isTimeThresholdMet) {
+      return { persisted: false, reason: 'Telemetry point does not satisfy movement/heading/time criteria' };
+    }
+
+    // Persist new route point & update accumulated distance
+    const newPoint = {
+      coordinates: [payload.longitude, payload.latitude] as [number, number],
+      timestamp: incomingTs,
+      accuracy: payload.accuracy,
+      speed: payload.speed,
+      heading: payload.heading,
+    };
+
+    const newDistance = Math.round((ride.distanceMeters || 0) + distMeters);
+    ride.routePoints.push(newPoint);
+    ride.routePointCount = ride.routePoints.length;
+    ride.distanceMeters = newDistance;
+    await ride.save();
+
+    return {
+      persisted: true,
+      reason: isSignificantTurn ? 'Significant turn detected' : isSignificantMove ? 'Significant movement detected' : 'Time threshold met',
+      routePointCount: ride.routePoints.length,
+      distanceMeters: newDistance,
+      addedDistanceMeters: Math.round(distMeters),
+    };
+  }
   /**
    * Helper: Generate human-readable short ride ID
    */
@@ -436,6 +581,23 @@ export class RideService {
     ride.endLongitude = endLng;
     ride.status = 'COMPLETED';
     ride.completedAt = new Date();
+
+    // Finalize journey route telemetry: append official dropoff point as closing point
+    const routePoints = ride.routePoints || [];
+    if (routePoints.length > 0) {
+      const lastPoint = routePoints[routePoints.length - 1];
+      const dist = this.calculateHaversineDistanceMeters(lastPoint.coordinates[1], lastPoint.coordinates[0], endLat, endLng);
+      if (dist >= 1) {
+        routePoints.push({
+          coordinates: [endLng, endLat],
+          timestamp: new Date(),
+          accuracy: passLoc?.accuracy || drivLoc?.accuracy,
+        });
+        ride.routePoints = routePoints;
+        ride.routePointCount = routePoints.length;
+        ride.distanceMeters = Math.round((ride.distanceMeters || 0) + dist);
+      }
+    }
 
     await ride.save();
 

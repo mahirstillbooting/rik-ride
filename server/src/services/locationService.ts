@@ -171,6 +171,14 @@ export class LocationService {
       }
     );
 
+    // 6. Process active ride telemetry if driver is currently on an ACTIVE trip
+    try {
+      const { rideService } = require('./rideService');
+      await rideService.processActiveRideTelemetry(driverId, payload);
+    } catch (err) {
+      console.error('Error processing ride telemetry:', err);
+    }
+
     return {
       success: true,
       statusCode: 200,

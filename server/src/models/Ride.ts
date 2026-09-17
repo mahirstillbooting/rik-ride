@@ -14,6 +14,14 @@ export type RideStatus =
 
 export type PaymentMethod = 'CASH' | 'BKASH' | 'NAGAD' | 'OTHER_MFS';
 
+export interface IRoutePoint {
+  coordinates: [number, number]; // [longitude, latitude] GeoJSON Point
+  timestamp: Date;
+  accuracy?: number;
+  speed?: number;
+  heading?: number;
+}
+
 export interface IRide extends Document {
   rideId: string; // Short human-readable identifier e.g. RIDE-8042
   passengerId: Types.ObjectId;
@@ -37,6 +45,11 @@ export interface IRide extends Document {
   endCoordinates?: IGeoPoint; // [longitude, latitude] GeoJSON
   endLatitude?: number;
   endLongitude?: number;
+
+  // Storage-efficient Route History & Distance Telemetry
+  routePoints?: IRoutePoint[];
+  distanceMeters?: number;
+  routePointCount?: number;
 
   // Speed check for completion request
   lastValidatedSpeed?: number; // km/h
@@ -110,6 +123,19 @@ const RideSchema = new Schema<IRide>(
     },
     endLatitude: { type: Number },
     endLongitude: { type: Number },
+
+    // Storage-efficient Route History & Distance Telemetry
+    routePoints: [
+      {
+        coordinates: { type: [Number], required: true }, // [longitude, latitude]
+        timestamp: { type: Date, required: true },
+        accuracy: { type: Number },
+        speed: { type: Number },
+        heading: { type: Number },
+      },
+    ],
+    distanceMeters: { type: Number, default: 0 },
+    routePointCount: { type: Number, default: 0 },
 
     lastValidatedSpeed: { type: Number },
 

@@ -45,6 +45,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleNavigationConfig> = {
       { id: 'admin-drivers', label: 'Drivers', iconName: 'navigation' },
       { id: 'admin-vehicles', label: 'Rickshaws / Fleet', iconName: 'truck' },
       { id: 'admin-safety', label: 'Safety & SOS', iconName: 'alert-triangle' },
+      { id: 'admin-rides', label: 'Trip History & Investigations', iconName: 'navigation' },
       { id: 'admin-audit', label: 'Audit Activity', iconName: 'shield' },
       { id: 'admin-settings', label: 'Platform Settings', iconName: 'settings' },
     ],

@@ -169,5 +169,10 @@ RideSchema.index({ driverId: 1, status: 1 });
 RideSchema.index({ targetDriverId: 1, status: 1 });
 RideSchema.index({ passengerId: 1, status: 1 });
 RideSchema.index({ requestedAt: -1 });
+RideSchema.index({ passengerId: 1, status: 1, completedAt: -1 });
+RideSchema.index({ driverId: 1, status: 1, completedAt: -1 });
+RideSchema.index({ vehicleId: 1, status: 1, completedAt: -1 });
+RideSchema.index({ garageId: 1, status: 1, completedAt: -1 });
+RideSchema.index({ completedAt: -1 });
 
 export const Ride = model<IRide>('Ride', RideSchema);

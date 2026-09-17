@@ -31,6 +31,8 @@ import {
   GarageProfile,
   DriverHistoryItem,
 } from '../services/garageService';
+import { clientRideService, HistoricalTripSummary, DetailedTripRecord } from '../services/rideService';
+import { RealMapContainer } from '../components/ui/RealMapContainer';
 
 export const GarageDashboardView: React.FC = () => {
   const { colors } = useTheme();
@@ -39,7 +41,14 @@ export const GarageDashboardView: React.FC = () => {
   const { showToast } = useToast();
 
   // Active sub-tab state derived from activeRouteId or manual selection
-  const [activeTab, setActiveTab] = useState<'overview' | 'vehicles' | 'drivers' | 'profile'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'vehicles' | 'drivers' | 'rides' | 'profile'>('overview');
+
+  // Garage Ride History States
+  const [garageTripHistory, setGarageTripHistory] = useState<HistoricalTripSummary[]>([]);
+  const [loadingGarageTrips, setLoadingGarageTrips] = useState(false);
+  const [selectedTrip, setSelectedTrip] = useState<DetailedTripRecord | null>(null);
+  const [loadingTripDetail, setLoadingTripDetail] = useState(false);
+  const [showTripModal, setShowTripModal] = useState(false);
 
   // Core Data States
   const [loading, setLoading] = useState(true);
@@ -94,6 +103,30 @@ export const GarageDashboardView: React.FC = () => {
 
   const [submittingAction, setSubmittingAction] = useState(false);
 
+  // Load Garage Ride History
+  const loadGarageTripHistory = useCallback(async () => {
+    setLoadingGarageTrips(true);
+    const res = await clientRideService.getGarageTripHistory();
+    if (res.success && res.trips) {
+      setGarageTripHistory(res.trips);
+    } else {
+      showToast(res.error || 'Failed to load garage ride history', 'danger');
+    }
+    setLoadingGarageTrips(false);
+  }, [showToast]);
+
+  const handleOpenTripDetail = async (rideId: string) => {
+    setLoadingTripDetail(true);
+    setShowTripModal(true);
+    const res = await clientRideService.getTripDetailById(rideId);
+    if (res.success && res.trip) {
+      setSelectedTrip(res.trip);
+    } else {
+      showToast(res.error || 'Failed to load trip details', 'danger');
+    }
+    setLoadingTripDetail(false);
+  };
+
   // Sync route ID to active tab
   useEffect(() => {
     if (activeRouteId === 'garage-vehicles') setActiveTab('vehicles');
@@ -101,6 +134,10 @@ export const GarageDashboardView: React.FC = () => {
     else if (activeRouteId === 'garage-profile') setActiveTab('profile');
     else setActiveTab('overview');
   }, [activeRouteId]);
+
+  useEffect(() => {
+    if (activeTab === 'rides') loadGarageTripHistory();
+  }, [activeTab, loadGarageTripHistory]);
 
   // Load initial garage stats & profile
   const loadDashboardData = useCallback(async () => {
@@ -446,6 +483,22 @@ export const GarageDashboardView: React.FC = () => {
             <Icon name="users" size={14} color={activeTab === 'drivers' ? '#FFFFFF' : colors.textSecondary} />
             <Text style={[styles.navTabText, { color: activeTab === 'drivers' ? '#FFFFFF' : colors.textSecondary }]}>
               Drivers
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.navTabBtn,
+              activeTab === 'rides' && { backgroundColor: colors.primary, borderColor: colors.primary },
+            ]}
+            onPress={() => {
+              setActiveTab('rides');
+              loadGarageTripHistory();
+            }}
+          >
+            <Icon name="navigation" size={14} color={activeTab === 'rides' ? '#FFFFFF' : colors.textSecondary} />
+            <Text style={[styles.navTabText, { color: activeTab === 'rides' ? '#FFFFFF' : colors.textSecondary }]}>
+              Ride History
             </Text>
           </TouchableOpacity>
 
@@ -935,6 +988,178 @@ export const GarageDashboardView: React.FC = () => {
           </Card>
         </ScrollView>
       )}
+
+      {/* TAB 5: GARAGE VEHICLE RIDE HISTORY */}
+      {activeTab === 'rides' && (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Card variant="elevated">
+            <CardHeader
+              title="Garage Fleet Ride History"
+              subtitle="Completed journey records & telemetry paths for your garage vehicles"
+            />
+            <CardBody style={{ gap: spacing.md }}>
+              {loadingGarageTrips ? (
+                <LoadingState message="Fetching garage vehicle ride history..." />
+              ) : garageTripHistory.length === 0 ? (
+                <EmptyState
+                  title="No Garage Vehicle Trips"
+                  description="Completed trips from drivers operating your registered garage vehicles will appear here."
+                />
+              ) : (
+                garageTripHistory.map((trip) => (
+                  <View
+                    key={trip.id}
+                    style={[
+                      styles.historyItem,
+                      { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                    ]}
+                  >
+                    <View style={styles.historyHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                        <Icon name="navigation" size={16} color={colors.primary} />
+                        <Text style={[styles.historyVehTitle, { color: colors.textPrimary }]}>
+                          {trip.rideId}
+                        </Text>
+                        <Badge label={`Vehicle ${trip.shortVehicleNumber}`} variant="info" />
+                        <Badge label={trip.status} variant="success" />
+                      </View>
+                      <Text style={[styles.historyDates, { color: colors.textMuted }]}>
+                        {trip.completedAt ? new Date(trip.completedAt).toLocaleString() : 'Completed'}
+                      </Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs }}>
+                      <View style={{ flex: 1, minWidth: 120 }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Assigned Driver</Text>
+                        <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: '700' }}>{trip.driverName || 'N/A'}</Text>
+                      </View>
+                      <View style={{ flex: 1, minWidth: 120 }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Passenger</Text>
+                        <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: '700' }}>{trip.passengerName || trip.passengerPseudonym || 'Passenger'}</Text>
+                      </View>
+                      <View style={{ flex: 1, minWidth: 120 }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Distance & Duration</Text>
+                        <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: '700' }}>
+                          {(trip.distanceMeters / 1000).toFixed(2)} km ({Math.round(trip.durationSeconds / 60)} m)
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, minWidth: 120 }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Fare / Settlement</Text>
+                        <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '800' }}>
+                          ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' }}>
+                      {trip.passengerRating ? (
+                        <Text style={{ color: '#F59E0B', fontWeight: '800', fontSize: 13 }}>★ {trip.passengerRating}.0 Passenger Rating</Text>
+                      ) : (
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Unrated Trip</Text>
+                      )}
+
+                      <Button
+                        title="Inspect Journey Map"
+                        variant="outline"
+                        size="sm"
+                        onPress={() => handleOpenTripDetail(trip.id)}
+                      />
+                    </View>
+                  </View>
+                ))
+              )}
+            </CardBody>
+          </Card>
+        </ScrollView>
+      )}
+
+      {/* MODAL: GARAGE DETAILED HISTORICAL JOURNEY & MAP */}
+      <Modal
+        visible={showTripModal}
+        onClose={() => {
+          setShowTripModal(false);
+          setSelectedTrip(null);
+        }}
+        title={`Garage Fleet Journey: ${selectedTrip?.rideId || 'Trip Detail'}`}
+      >
+        {loadingTripDetail || !selectedTrip ? (
+          <LoadingState message="Loading historical route telemetry map..." />
+        ) : (
+          <ScrollView style={{ maxHeight: 540 }}>
+            <View style={{ gap: spacing.md }}>
+              <RealMapContainer
+                isHistoricalView={true}
+                title={`Historical Path: ${selectedTrip.rideId}`}
+                subtitle={`Official GPS Path • Vehicle ${selectedTrip.shortVehicleNumber} (${selectedTrip.driverName || 'Driver'})`}
+                height={300}
+                startLocation={
+                  selectedTrip.pickupLocation
+                    ? {
+                        latitude: selectedTrip.pickupLocation.coordinates[1],
+                        longitude: selectedTrip.pickupLocation.coordinates[0],
+                        label: 'Pickup Coordinates',
+                      }
+                    : undefined
+                }
+                endLocation={
+                  selectedTrip.endCoordinates
+                    ? {
+                        latitude: selectedTrip.endCoordinates.coordinates[1],
+                        longitude: selectedTrip.endCoordinates.coordinates[0],
+                        label: 'Official Drop-off (endCoordinates)',
+                      }
+                    : undefined
+                }
+                routePolyline={
+                  selectedTrip.routePoints && selectedTrip.routePoints.length > 1
+                    ? selectedTrip.routePoints.map((pt) => [pt.coordinates[1], pt.coordinates[0]])
+                    : undefined
+                }
+              />
+
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.xs }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 4 }}>Trip & Driver Audit</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Trip Reference:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.rideId}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Assigned Driver:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.driverName || 'N/A'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Passenger Name:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.passengerName || selectedTrip.passengerPseudonym || 'Passenger'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Vehicle Short Number:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>Vehicle {selectedTrip.shortVehicleNumber}</Text>
+                </View>
+              </View>
+
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.xs }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 4 }}>Telemetry & Settlement</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Distance Telemetry:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{(selectedTrip.distanceMeters / 1000).toFixed(2)} km</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Total Fare Amount:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.primary }}>৳{selectedTrip.fareAmount || 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Driver Earnings Share:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>৳{selectedTrip.settlement?.driverEarnings || selectedTrip.fareAmount || 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Platform Commission:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textMuted }}>৳{selectedTrip.settlement?.platformCommission || 0}</Text>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        )}
+      </Modal>
 
       {/* MODAL: REGISTER VEHICLE */}
       <Modal

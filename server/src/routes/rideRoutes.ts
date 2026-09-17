@@ -258,4 +258,117 @@ router.get('/driver/active', requireRole('DRIVER'), async (req: AuthenticatedReq
   }
 });
 
+// -------------------------------------------------------------
+// TRIP HISTORY & JOURNEY RECORD ENDPOINTS
+// -------------------------------------------------------------
+
+/**
+ * GET /api/ride/passenger/history
+ * Fetch paginated completed trip history for authenticated passenger
+ */
+router.get('/passenger/history', requireRole('PASSENGER'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { page, limit, startDate, endDate } = req.query;
+    const result = await rideService.getPassengerTripHistory(req.user!.id, {
+      page: page ? parseInt(page as string, 10) : undefined,
+      limit: limit ? parseInt(limit as string, 10) : undefined,
+      startDate: startDate as string,
+      endDate: endDate as string,
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch passenger trip history', details: error.message });
+  }
+});
+
+/**
+ * GET /api/ride/driver/history
+ * Fetch paginated completed trip history for authenticated driver
+ */
+router.get('/driver/history', requireRole('DRIVER'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { page, limit, startDate, endDate } = req.query;
+    const result = await rideService.getDriverTripHistory(req.user!.id, {
+      page: page ? parseInt(page as string, 10) : undefined,
+      limit: limit ? parseInt(limit as string, 10) : undefined,
+      startDate: startDate as string,
+      endDate: endDate as string,
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch driver trip history', details: error.message });
+  }
+});
+
+/**
+ * GET /api/ride/garage/history
+ * Fetch completed trip history for garage owner's registered vehicles and drivers
+ */
+router.get('/garage/history', requireRole('GARAGE_OWNER'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { vehicleId, driverId, startDate, endDate, page, limit } = req.query;
+    const result = await rideService.getGarageTripHistory(req.user!.id, {
+      vehicleId: vehicleId as string,
+      driverId: driverId as string,
+      startDate: startDate as string,
+      endDate: endDate as string,
+      page: page ? parseInt(page as string, 10) : undefined,
+      limit: limit ? parseInt(limit as string, 10) : undefined,
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch garage trip history', details: error.message });
+  }
+});
+
+/**
+ * GET /api/ride/admin/history
+ * Fetch operational completed trip history with search and filtering for Admin
+ */
+router.get('/admin/history', requireRole('ADMIN'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { search, vehicleId, driverId, garageId, status, hasSafetyEvent, startDate, endDate, page, limit } = req.query;
+    const result = await rideService.getAdminTripHistory({
+      search: search as string,
+      vehicleId: vehicleId as string,
+      driverId: driverId as string,
+      garageId: garageId as string,
+      status: status as string,
+      hasSafetyEvent: hasSafetyEvent as string,
+      startDate: startDate as string,
+      endDate: endDate as string,
+      page: page ? parseInt(page as string, 10) : undefined,
+      limit: limit ? parseInt(limit as string, 10) : undefined,
+    });
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch admin trip history', details: error.message });
+  }
+});
+
+/**
+ * GET /api/ride/detail/:id
+ * Retrieve detailed trip record & route telemetry by ride ID with strict IDOR role authorization
+ */
+router.get('/detail/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const rideId = req.params.id;
+    if (!rideId) {
+      res.status(400).json({ success: false, error: 'Ride ID parameter is required' });
+      return;
+    }
+
+    const result = await rideService.getTripDetailById(req.user!.id, req.user!.role, rideId);
+
+    if (!result.success) {
+      res.status(result.statusCode || 400).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to fetch trip detail', details: error.message });
+  }
+});
+
 export default router;

@@ -36,6 +36,9 @@ export interface RealMapContainerProps {
   onTargetedRequest?: (rickshaw: NearbyRickshaw) => void;
   onSelectDriverMarker?: (driverMarker: any) => void;
   routePolyline?: Array<[number, number]>;
+  isHistoricalView?: boolean;
+  startLocation?: { latitude: number; longitude: number; label?: string };
+  endLocation?: { latitude: number; longitude: number; label?: string };
 }
 
 export const RealMapContainer: React.FC<RealMapContainerProps> = ({
@@ -54,6 +57,9 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   onTargetedRequest,
   onSelectDriverMarker,
   routePolyline,
+  isHistoricalView = false,
+  startLocation,
+  endLocation,
 }) => {
   const { colors, mode } = useTheme();
 
@@ -83,6 +89,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   const rickshawLayerGroupRef = useRef<any>(null);
   const driverLayerGroupRef = useRef<any>(null);
   const passengerLayerGroupRef = useRef<any>(null);
+  const historicalLayerGroupRef = useRef<any>(null);
   const polylineRef = useRef<any>(null);
 
   const [isUserPanning, setIsUserPanning] = useState(false);
@@ -102,6 +109,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   const modalRickshawLayerGroupRef = useRef<any>(null);
   const modalDriverLayerGroupRef = useRef<any>(null);
   const modalPassengerLayerGroupRef = useRef<any>(null);
+  const modalHistoricalLayerGroupRef = useRef<any>(null);
   const modalPolylineRef = useRef<any>(null);
 
   const onSelectDriverMarkerRef = useRef(onSelectDriverMarker);
@@ -524,6 +532,85 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
 
       marker.addTo(layerGroupRef.current);
     });
+  };
+
+  // -------------------------------------------------------------
+  // RENDER HISTORICAL TRIP START & END MARKERS ON LEAFLET MAP INSTANCE
+  // -------------------------------------------------------------
+  const updateHistoricalMarkersOnMap = (map: any, layerGroupRef: React.MutableRefObject<any>) => {
+    if (!map || !isHistoricalView || Platform.OS !== 'web') return;
+    let L: any;
+    try {
+      L = require('leaflet');
+    } catch {
+      return;
+    }
+
+    if (!layerGroupRef.current) {
+      layerGroupRef.current = L.layerGroup().addTo(map);
+    } else {
+      layerGroupRef.current.clearLayers();
+    }
+
+    if (startLocation) {
+      const startIcon = L.divIcon({
+        className: 'rik-history-start-marker',
+        html: `
+          <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <div style="background: #10B981; color: #FFFFFF; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; border: 1.5px solid #FFFFFF; box-shadow: 0 3px 10px rgba(0,0,0,0.5); letter-spacing: 0.5px; white-space: nowrap; margin-bottom: 2px;">START</div>
+            <div style="width: 14px; height: 14px; border-radius: 50%; background: #10B981; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.6);"></div>
+          </div>
+        `,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+      });
+      L.marker([startLocation.latitude, startLocation.longitude], { icon: startIcon })
+        .bindTooltip(`<div style="padding: 4px 8px; font-family: system-ui; background: #18181B; color: #FAFAFA; border: 1px solid #10B981; border-radius: 6px; font-size: 11px;"><strong>Start Location</strong><br/>${startLocation.label || ''}</div>`, { direction: 'top', className: 'rik-custom-leaflet-tooltip' })
+        .addTo(layerGroupRef.current);
+    }
+
+    if (endLocation) {
+      const endIcon = L.divIcon({
+        className: 'rik-history-end-marker',
+        html: `
+          <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <div style="background: #EF4444; color: #FFFFFF; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; border: 1.5px solid #FFFFFF; box-shadow: 0 3px 10px rgba(0,0,0,0.5); letter-spacing: 0.5px; white-space: nowrap; margin-bottom: 2px;">OFFICIAL END</div>
+            <div style="width: 14px; height: 14px; border-radius: 50%; background: #EF4444; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.6);"></div>
+          </div>
+        `,
+        iconSize: [50, 40],
+        iconAnchor: [25, 20],
+      });
+      L.marker([endLocation.latitude, endLocation.longitude], { icon: endIcon })
+        .bindTooltip(`<div style="padding: 4px 8px; font-family: system-ui; background: #18181B; color: #FAFAFA; border: 1px solid #EF4444; border-radius: 6px; font-size: 11px;"><strong>Official Drop-off Location</strong><br/>${endLocation.label || ''}</div>`, { direction: 'top', className: 'rik-custom-leaflet-tooltip' })
+        .addTo(layerGroupRef.current);
+    }
+  };
+
+  const fitHistoricalMapBounds = (map: any) => {
+    if (!map || !isHistoricalView || Platform.OS !== 'web') return;
+    let L: any;
+    try {
+      L = require('leaflet');
+    } catch {
+      return;
+    }
+
+    const points: Array<[number, number]> = [];
+    if (startLocation) points.push([startLocation.latitude, startLocation.longitude]);
+    if (endLocation) points.push([endLocation.latitude, endLocation.longitude]);
+    if (routePolyline && routePolyline.length > 0) {
+      routePolyline.forEach((pt) => points.push(pt));
+    }
+
+    if (points.length > 0) {
+      try {
+        const bounds = L.latLngBounds(points);
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 17 });
+      } catch (err) {
+        console.warn('fitBounds warning:', err);
+      }
+    }
   };
 
   // -------------------------------------------------------------

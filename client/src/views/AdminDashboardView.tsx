@@ -33,7 +33,7 @@ import {
   AdminFleetSummary,
   AdminFleetDriverLocation,
 } from '../services/adminService';
-import { clientRideService, RideData } from '../services/rideService';
+import { clientRideService, RideData, HistoricalTripSummary, DetailedTripRecord } from '../services/rideService';
 import { clientSafetyService, SafetyEventData } from '../services/safetyService';
 
 export const AdminDashboardView: React.FC = () => {
@@ -44,6 +44,17 @@ export const AdminDashboardView: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Admin Trip History States
+  const [adminTripHistory, setAdminTripHistory] = useState<HistoricalTripSummary[]>([]);
+  const [loadingAdminTrips, setLoadingAdminTrips] = useState(false);
+  const [historySearchText, setHistorySearchText] = useState('');
+  const [historySafetyOnly, setHistorySafetyOnly] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [selectedTrip, setSelectedTrip] = useState<DetailedTripRecord | null>(null);
+  const [loadingTripDetail, setLoadingTripDetail] = useState(false);
+  const [showTripModal, setShowTripModal] = useState(false);
 
   // Stats & Data state
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -244,6 +255,8 @@ export const AdminDashboardView: React.FC = () => {
       } else if (currentNavItem.id === 'admin-vehicles') {
         const vehiclesRes = await adminService.getVehicles();
         setVehiclesList(vehiclesRes);
+      } else if (currentNavItem.id === 'admin-rides') {
+        await loadAdminTripHistory();
       } else if (currentNavItem.id === 'admin-audit') {
         const logsRes = await adminService.getAuditLogs(1, 50);
         setAuditLogs(logsRes);
@@ -256,9 +269,40 @@ export const AdminDashboardView: React.FC = () => {
     }
   };
 
+  const loadAdminTripHistory = useCallback(async () => {
+    setLoadingAdminTrips(true);
+    const res = await clientRideService.getAdminTripHistory({
+      search: historySearchText.trim() || undefined,
+      hasSafetyEvent: historySafetyOnly ? 'true' : undefined,
+      page: historyPage,
+      limit: 20,
+    });
+    if (res.success && res.trips) {
+      setAdminTripHistory(res.trips);
+      if (res.pagination) {
+        setHistoryTotalPages(res.pagination.pages || 1);
+      }
+    } else {
+      showToast(res.error || 'Failed to fetch admin trip history', 'danger');
+    }
+    setLoadingAdminTrips(false);
+  }, [historySearchText, historySafetyOnly, historyPage, showToast]);
+
+  const handleOpenTripDetail = async (rideId: string) => {
+    setLoadingTripDetail(true);
+    setShowTripModal(true);
+    const res = await clientRideService.getTripDetailById(rideId);
+    if (res.success && res.trip) {
+      setSelectedTrip(res.trip);
+    } else {
+      showToast(res.error || 'Failed to load trip details', 'danger');
+    }
+    setLoadingTripDetail(false);
+  };
+
   useEffect(() => {
     loadDataForActiveTab();
-  }, [currentNavItem.id, userRoleFilter, userStatusFilter]);
+  }, [currentNavItem.id, userRoleFilter, userStatusFilter, historySearchText, historySafetyOnly, historyPage]);
 
   const handleApprovalAction = async (
     entityType: 'USER' | 'GARAGE' | 'VEHICLE',
@@ -1238,7 +1282,142 @@ export const AdminDashboardView: React.FC = () => {
               </View>
             )}
 
-            {/* TAB 8: AUDIT ACTIVITY */}
+            {/* TAB 8: TRIP HISTORY & INVESTIGATIONS */}
+            {currentNavItem.id === 'admin-rides' && (
+              <View style={styles.viewSection}>
+                <Card variant="elevated" style={styles.fullWidthCard}>
+                  <CardHeader
+                    title="Historical Trip Investigations & Telemetry Records"
+                    subtitle="Filter completed journeys, inspect official drop-off coordinates & audit telemetry paths"
+                    icon={<Icon name="navigation" size={18} color={colors.primary} />}
+                  />
+                  <CardBody style={{ gap: spacing.md }}>
+                    {/* Search & Filter Controls */}
+                    <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <View style={{ flex: 1, minWidth: 220 }}>
+                        <Input
+                          placeholder="Search Trip Ref, Vehicle #, Driver, Passenger..."
+                          value={historySearchText}
+                          onChangeText={setHistorySearchText}
+                        />
+                      </View>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: historySafetyOnly ? '#FEF2F2' : colors.surfaceElevated,
+                          borderColor: historySafetyOnly ? '#EF4444' : colors.border,
+                          paddingHorizontal: spacing.md,
+                          paddingVertical: spacing.sm,
+                          borderRadius: borderRadius.md,
+                          borderWidth: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: spacing.xs,
+                        }}
+                        onPress={() => setHistorySafetyOnly(!historySafetyOnly)}
+                      >
+                        <Icon name="alert-triangle" size={16} color={historySafetyOnly ? '#DC2626' : colors.textSecondary} />
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: historySafetyOnly ? '#DC2626' : colors.textSecondary }}>
+                          {historySafetyOnly ? 'Safety Alerts Only (Active)' : 'Filter Safety Alerts'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Trip Record Cards */}
+                    {loadingAdminTrips ? (
+                      <LoadingState message="Loading historical trip records for investigation..." />
+                    ) : adminTripHistory.length === 0 ? (
+                      <EmptyState
+                        title="No Matching Journeys Found"
+                        description="No completed rides match your current search parameters."
+                      />
+                    ) : (
+                      adminTripHistory.map((trip) => (
+                        <View
+                          key={trip.id}
+                          style={{
+                            padding: spacing.md,
+                            borderRadius: borderRadius.md,
+                            borderWidth: 1,
+                            backgroundColor: colors.surfaceElevated,
+                            borderColor: colors.border,
+                            gap: spacing.xs,
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: spacing.xs }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                              <Icon name="navigation" size={16} color={colors.primary} />
+                              <Text style={{ fontSize: 15, fontWeight: '800', color: colors.textPrimary }}>
+                                {trip.rideId}
+                              </Text>
+                              <Badge label={`Vehicle ${trip.shortVehicleNumber}`} variant="info" />
+                              <Badge label={trip.status} variant="success" />
+                              {trip.hasSafetyEvent && (
+                                <Badge label="SAFETY EVENT" variant="warning" />
+                              )}
+                            </View>
+                            <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                              {trip.completedAt ? new Date(trip.completedAt).toLocaleString() : 'Completed'}
+                            </Text>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs }}>
+                            <View style={{ flex: 1, minWidth: 140 }}>
+                              <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Passenger</Text>
+                              <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: '700' }}>
+                                {trip.passengerName || trip.passengerPseudonym} ({trip.passengerPhone || 'N/A'})
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1, minWidth: 140 }}>
+                              <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Assigned Driver</Text>
+                              <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: '700' }}>
+                                {trip.driverName || 'Driver'} ({trip.driverPhone || 'N/A'})
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1, minWidth: 140 }}>
+                              <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Garage</Text>
+                              <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: '700' }}>
+                                {trip.garageName || 'Self-Owned'}
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1, minWidth: 140 }}>
+                              <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Distance / Duration</Text>
+                              <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: '700' }}>
+                                {(trip.distanceMeters / 1000).toFixed(2)} km ({Math.round(trip.durationSeconds / 60)} m)
+                              </Text>
+                            </View>
+                            <View style={{ flex: 1, minWidth: 140 }}>
+                              <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Fare Settlement</Text>
+                              <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '800' }}>
+                                ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' }}>
+                            {trip.passengerRating ? (
+                              <Text style={{ color: '#F59E0B', fontWeight: '800', fontSize: 13 }}>
+                                ★ {trip.passengerRating}.0 Rating
+                              </Text>
+                            ) : (
+                              <Text style={{ color: colors.textMuted, fontSize: 12 }}>Unrated</Text>
+                            )}
+
+                            <Button
+                              title="Inspect Lifecycle & Telemetry Map"
+                              variant="outline"
+                              size="sm"
+                              onPress={() => handleOpenTripDetail(trip.id)}
+                            />
+                          </View>
+                        </View>
+                      ))
+                    )}
+                  </CardBody>
+                </Card>
+              </View>
+            )}
+
+            {/* TAB 9: AUDIT ACTIVITY */}
             {currentNavItem.id === 'admin-audit' && (
               <View style={styles.viewSection}>
                 <Card variant="default" style={styles.fullWidthCard}>
@@ -1320,14 +1499,161 @@ export const AdminDashboardView: React.FC = () => {
             />
             <Button
               title="Confirm Resolution"
-              variant="primary"
+              variant="success"
               size="md"
               loading={resolvingLoading}
-              icon={<Icon name="check-circle" size={16} color="#FFFFFF" />}
               onPress={handleConfirmResolveSafety}
             />
           </View>
         </View>
+      </Modal>
+
+      {/* MODAL: ADMIN COMPREHENSIVE TRIP INVESTIGATION & TELEMETRY */}
+      <Modal
+        visible={showTripModal}
+        onClose={() => {
+          setShowTripModal(false);
+          setSelectedTrip(null);
+        }}
+        title={`Admin Operational Investigation: ${selectedTrip?.rideId || 'Trip Detail'}`}
+      >
+        {loadingTripDetail || !selectedTrip ? (
+          <LoadingState message="Loading operational telemetry path & investigation data..." />
+        ) : (
+          <ScrollView style={{ maxHeight: 560 }}>
+            <View style={{ gap: spacing.md }}>
+              {/* Historical Leaflet Map */}
+              <RealMapContainer
+                isHistoricalView={true}
+                title={`Telemetry Investigation: ${selectedTrip.rideId}`}
+                subtitle={`Verified Drop-off Coordinates [${selectedTrip.endLatitude?.toFixed(4)}, ${selectedTrip.endLongitude?.toFixed(4)}] • ${selectedTrip.routePointCount || selectedTrip.routePoints?.length || 0} Telemetry Points`}
+                height={300}
+                startLocation={
+                  selectedTrip.pickupLocation
+                    ? {
+                        latitude: selectedTrip.pickupLocation.coordinates[1],
+                        longitude: selectedTrip.pickupLocation.coordinates[0],
+                        label: 'Pickup Coordinates',
+                      }
+                    : undefined
+                }
+                endLocation={
+                  selectedTrip.endCoordinates
+                    ? {
+                        latitude: selectedTrip.endCoordinates.coordinates[1],
+                        longitude: selectedTrip.endCoordinates.coordinates[0],
+                        label: 'Official Drop-off (endCoordinates)',
+                      }
+                    : undefined
+                }
+                routePolyline={
+                  selectedTrip.routePoints && selectedTrip.routePoints.length > 1
+                    ? selectedTrip.routePoints.map((pt) => [pt.coordinates[1], pt.coordinates[0]])
+                    : undefined
+                }
+              />
+
+              {/* Operational Lifecycle Timeline Card */}
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.xs }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: spacing.xs }}>Operational Lifecycle Timeline</Text>
+                <View style={{ gap: 6 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Badge label="1. INITIATED" variant="neutral" />
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{selectedTrip.requestedAt ? new Date(selectedTrip.requestedAt).toLocaleString() : 'N/A'}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Badge label="2. ACCEPTED" variant="info" />
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{selectedTrip.acceptedAt ? new Date(selectedTrip.acceptedAt).toLocaleString() : 'N/A'}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Badge label="3. ACTIVE" variant="success" />
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{selectedTrip.startedAt ? new Date(selectedTrip.startedAt).toLocaleString() : 'N/A'}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Badge label="4. ENDING" variant="warning" />
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{selectedTrip.completionRequestedAt ? new Date(selectedTrip.completionRequestedAt).toLocaleString() : 'N/A'}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Badge label="5. COMPLETED" variant="success" />
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{selectedTrip.completedAt ? new Date(selectedTrip.completedAt).toLocaleString() : 'N/A'}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Identity & Vehicle Audit */}
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.xs }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 4 }}>Entities & Identity Audit</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Passenger Identity:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.passengerName} ({selectedTrip.passengerPhone})</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Driver Identity:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.driverName} ({selectedTrip.driverPhone})</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Driver Mode:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>{selectedTrip.driverMode || 'GARAGE_REGISTERED'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Vehicle Identity:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>Vehicle {selectedTrip.shortVehicleNumber} ({selectedTrip.registrationNumber})</Text>
+                </View>
+                {selectedTrip.garageName && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 12, color: colors.textMuted }}>Registered Garage:</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.garageName} ({selectedTrip.garagePhone || 'N/A'})</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Settlement & Rating */}
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.xs }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 4 }}>Financial Settlement Ledger</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Gross Fare:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.primary }}>৳{selectedTrip.fareAmount || 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Driver Shift Share:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.success }}>৳{selectedTrip.settlement?.driverEarnings || selectedTrip.fareAmount || 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Platform Commission:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textMuted }}>৳{selectedTrip.settlement?.platformCommission || 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Payment Method:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.paymentMethod || 'CASH'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Passenger Rating:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: selectedTrip.passengerRating ? '#F59E0B' : colors.textMuted }}>
+                    {selectedTrip.passengerRating ? `★ ${selectedTrip.passengerRating}.0` : 'Unrated'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Safety Investigation Alert (if any) */}
+              {selectedTrip.safetyEvent && (
+                <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: '#FEF2F2', borderColor: '#EF4444', gap: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Icon name="alert-circle" size={18} color="#DC2626" />
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#DC2626' }}>Safety Alert Incident Logged</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: '#991B1B' }}>
+                    Event ID: {selectedTrip.safetyEvent.eventId} • Severity: {selectedTrip.safetyEvent.severity} • Status: {selectedTrip.safetyEvent.status}
+                  </Text>
+                  {selectedTrip.safetyEvent.description && (
+                    <Text style={{ fontSize: 12, color: '#991B1B', fontStyle: 'italic', marginTop: 2 }}>
+                      "{selectedTrip.safetyEvent.description}"
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        )}
       </Modal>
     </ScrollView>
   );

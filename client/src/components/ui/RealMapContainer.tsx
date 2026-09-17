@@ -21,6 +21,9 @@ export interface RealMapContainerProps {
   onTargetedRequest?: (rickshaw: any) => void;
   onSelectDriverMarker?: (driverMarker: any) => void;
   routePolyline?: Array<[number, number]>;
+  isHistoricalView?: boolean;
+  startLocation?: { latitude: number; longitude: number; label?: string };
+  endLocation?: { latitude: number; longitude: number; label?: string };
   style?: StyleProp<ViewStyle>;
 }
 

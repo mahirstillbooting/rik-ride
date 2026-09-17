@@ -30,7 +30,7 @@ import {
   DriverHistoryRecord,
 } from '../services/driverService';
 import { locationApiService, SharingStatus } from '../services/locationService';
-import { clientRideService, RideData } from '../services/rideService';
+import { clientRideService, RideData, HistoricalTripSummary, DetailedTripRecord } from '../services/rideService';
 
 export const DriverDashboardView: React.FC = () => {
   const { colors } = useTheme();
@@ -51,6 +51,13 @@ export const DriverDashboardView: React.FC = () => {
   // History Tab States
   const [assignmentHistory, setAssignmentHistory] = useState<DriverHistoryRecord[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Driver Trip History States
+  const [driverTripHistory, setDriverTripHistory] = useState<HistoricalTripSummary[]>([]);
+  const [loadingDriverTripHistory, setLoadingDriverTripHistory] = useState(false);
+  const [selectedTrip, setSelectedTrip] = useState<DetailedTripRecord | null>(null);
+  const [loadingTripDetail, setLoadingTripDetail] = useState(false);
+  const [showTripModal, setShowTripModal] = useState(false);
 
   // Self-Owned Vehicle Modal State
   const [showSelfVehicleModal, setShowSelfVehicleModal] = useState(false);
@@ -236,15 +243,35 @@ export const DriverDashboardView: React.FC = () => {
     }
   };
 
-  // Load History Log
+  // Load History Log (Vehicle Assignments & Completed Trips)
   const loadHistoryData = useCallback(async () => {
     setLoadingHistory(true);
+    setLoadingDriverTripHistory(true);
+
     const res = await driverService.getDriverHistory();
     if (res.success && res.assignmentHistory) {
       setAssignmentHistory(res.assignmentHistory);
     }
     setLoadingHistory(false);
+
+    const tripRes = await clientRideService.getDriverTripHistory();
+    if (tripRes.success && tripRes.trips) {
+      setDriverTripHistory(tripRes.trips);
+    }
+    setLoadingDriverTripHistory(false);
   }, []);
+
+  const handleOpenTripDetail = async (rideId: string) => {
+    setLoadingTripDetail(true);
+    setShowTripModal(true);
+    const res = await clientRideService.getTripDetailById(rideId);
+    if (res.success && res.trip) {
+      setSelectedTrip(res.trip);
+    } else {
+      showToast(res.error || 'Failed to load trip details', 'danger');
+    }
+    setLoadingTripDetail(false);
+  };
 
   // Load Garage Associations Log
   const loadGarageData = useCallback(async () => {
@@ -1315,18 +1342,180 @@ export const DriverDashboardView: React.FC = () => {
             </CardBody>
           </Card>
 
-          {/* Ride & Rating History Foundation Placeholders */}
-          <Card variant="default" style={styles.placeholderCard}>
-            <CardHeader title="Completed Rides & Ratings Foundation" subtitle="Future trip metrics module" />
-            <CardBody>
-              <EmptyState
-                title="No Trip Metrics Yet"
-                description="Completed trips, passenger ratings, and earnings history will be tracked here in future business modules."
-              />
+          {/* Completed Trips & Journey Telemetry History */}
+          <Card variant="elevated">
+            <CardHeader
+              title="Completed Driver Trips & Earnings"
+              subtitle="Verified ride records, pseudonymous passenger tracking & earnings ledger"
+            />
+            <CardBody style={{ gap: spacing.md }}>
+              {loadingDriverTripHistory ? (
+                <LoadingState message="Fetching driver completed trip records..." />
+              ) : driverTripHistory.length === 0 ? (
+                <EmptyState
+                  title="No Completed Trips"
+                  description="Completed trips, passenger ratings, and shift earnings will appear here after finishing rides."
+                />
+              ) : (
+                driverTripHistory.map((trip) => (
+                  <View
+                    key={trip.id}
+                    style={[
+                      styles.historyItem,
+                      { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                    ]}
+                  >
+                    <View style={styles.historyItemHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                        <Icon name="navigation" size={16} color={colors.primary} />
+                        <Text style={[styles.historyItemVeh, { color: colors.textPrimary }]}>
+                          {trip.rideId}
+                        </Text>
+                        {/* Passenger Pseudonym (Privacy Enforced - No Real Name/Phone) */}
+                        <Badge label={trip.passengerPseudonym || 'Passenger'} variant="info" />
+                        <Badge label={trip.status} variant="success" />
+                      </View>
+                      <Text style={[styles.historyItemText, { color: colors.textMuted }]}>
+                        {trip.completedAt ? new Date(trip.completedAt).toLocaleString() : 'Completed'}
+                      </Text>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.xs }}>
+                      <View style={{ flex: 1, minWidth: 120 }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Vehicle</Text>
+                        <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '700' }}>Vehicle {trip.shortVehicleNumber}</Text>
+                      </View>
+                      <View style={{ flex: 1, minWidth: 120 }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Pickup Area</Text>
+                        <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: '700' }}>{trip.approximatePickupArea || 'GPS Coordinates'}</Text>
+                      </View>
+                      <View style={{ flex: 1, minWidth: 120 }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Distance / Duration</Text>
+                        <Text style={{ fontSize: 13, color: colors.textPrimary, fontWeight: '700' }}>
+                          {(trip.distanceMeters / 1000).toFixed(2)} km ({Math.round(trip.durationSeconds / 60)} m)
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, minWidth: 120 }}>
+                        <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Fare Collected</Text>
+                        <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '800' }}>
+                          ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' }}>
+                      {trip.passengerRating ? (
+                        <Text style={{ color: '#F59E0B', fontWeight: '800', fontSize: 13 }}>★ {trip.passengerRating}.0 Passenger Rating</Text>
+                      ) : (
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>Unrated Trip</Text>
+                      )}
+
+                      <Button
+                        title="Inspect Route Map"
+                        variant="outline"
+                        size="sm"
+                        onPress={() => handleOpenTripDetail(trip.id)}
+                      />
+                    </View>
+                  </View>
+                ))
+              )}
             </CardBody>
           </Card>
         </ScrollView>
       )}
+
+      {/* MODAL: DRIVER DETAILED HISTORICAL JOURNEY & MAP */}
+      <Modal
+        visible={showTripModal}
+        onClose={() => {
+          setShowTripModal(false);
+          setSelectedTrip(null);
+        }}
+        title={`Driver Journey Log: ${selectedTrip?.rideId || 'Trip Detail'}`}
+      >
+        {loadingTripDetail || !selectedTrip ? (
+          <LoadingState message="Loading historical journey route map..." />
+        ) : (
+          <ScrollView style={{ maxHeight: 540 }}>
+            <View style={{ gap: spacing.md }}>
+              <RealMapContainer
+                isHistoricalView={true}
+                title={`Historical Path: ${selectedTrip.rideId}`}
+                subtitle={`Official GPS Telemetry Path • Vehicle ${selectedTrip.shortVehicleNumber}`}
+                height={300}
+                startLocation={
+                  selectedTrip.pickupLocation
+                    ? {
+                        latitude: selectedTrip.pickupLocation.coordinates[1],
+                        longitude: selectedTrip.pickupLocation.coordinates[0],
+                        label: 'Pickup Location',
+                      }
+                    : undefined
+                }
+                endLocation={
+                  selectedTrip.endCoordinates
+                    ? {
+                        latitude: selectedTrip.endCoordinates.coordinates[1],
+                        longitude: selectedTrip.endCoordinates.coordinates[0],
+                        label: 'Official Drop-off (endCoordinates)',
+                      }
+                    : undefined
+                }
+                routePolyline={
+                  selectedTrip.routePoints && selectedTrip.routePoints.length > 1
+                    ? selectedTrip.routePoints.map((pt) => [pt.coordinates[1], pt.coordinates[0]])
+                    : undefined
+                }
+              />
+
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.xs }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 4 }}>Ride & Pseudonym Identity</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Trip Reference:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.rideId}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Passenger Pseudonym:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>{selectedTrip.passengerPseudonym || 'Passenger'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Vehicle Short Number:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>Vehicle {selectedTrip.shortVehicleNumber}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Driver Operating Mode:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.driverMode || 'DRIVER'}</Text>
+                </View>
+              </View>
+
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.xs }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 4 }}>Telemetry & Settlement</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Distance Telemetry:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{(selectedTrip.distanceMeters / 1000).toFixed(2)} km</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Gross Fare Collected:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.primary }}>৳{selectedTrip.fareAmount || 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Driver Shift Earnings:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: colors.success }}>৳{selectedTrip.settlement?.driverEarnings || selectedTrip.fareAmount || 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Platform Commission:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textMuted }}>৳{selectedTrip.settlement?.platformCommission || 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Payment Method:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.paymentMethod || 'CASH'}</Text>
+                </View>
+              </View>
+            </View>
+          </ScrollView>
+        )}
+      </Modal>
 
       {/* TAB 5: DRIVER PROFILE */}
       {activeTab === 'profile' && (

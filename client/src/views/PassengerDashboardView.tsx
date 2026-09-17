@@ -9,19 +9,30 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { LoadingState } from '../components/ui/LoadingState';
+import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
 import { Icon } from '../components/ui/Icon';
 import { RealMapContainer } from '../components/ui/RealMapContainer';
 import { spacing, borderRadius } from '../theme/spacing';
 import { passengerLocationApiService, NearbyRickshaw } from '../services/passengerLocationService';
 import { SharingStatus } from '../services/locationService';
-import { clientRideService, RideData } from '../services/rideService';
+import { clientRideService, RideData, HistoricalTripSummary, DetailedTripRecord } from '../services/rideService';
 import { clientSafetyService } from '../services/safetyService';
 
 export const PassengerDashboardView: React.FC = () => {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { showToast } = useToast();
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'RADAR' | 'HISTORY'>('RADAR');
+
+  // Trip History States
+  const [tripHistory, setTripHistory] = useState<HistoricalTripSummary[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [selectedTrip, setSelectedTrip] = useState<DetailedTripRecord | null>(null);
+  const [loadingTripDetail, setLoadingTripDetail] = useState(false);
+  const [showTripModal, setShowTripModal] = useState(false);
 
   // Core Location & Permission States (Unified Source of Truth)
   const [sharingStatus, setSharingStatus] = useState<SharingStatus>('LOCATION_OFF');
@@ -93,6 +104,31 @@ export const PassengerDashboardView: React.FC = () => {
       }
     }
   }, []);
+
+  // Fetch Passenger Completed Trip History
+  const loadPassengerHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    const res = await clientRideService.getPassengerTripHistory();
+    if (res.success && res.trips) {
+      setTripHistory(res.trips);
+    } else {
+      showToast(res.error || 'Failed to load trip history', 'danger');
+    }
+    setLoadingHistory(false);
+  }, [showToast]);
+
+  // Open detailed historical journey record
+  const handleOpenTripDetail = async (rideId: string) => {
+    setLoadingTripDetail(true);
+    setShowTripModal(true);
+    const res = await clientRideService.getTripDetailById(rideId);
+    if (res.success && res.trip) {
+      setSelectedTrip(res.trip);
+    } else {
+      showToast(res.error || 'Failed to load trip details', 'danger');
+    }
+    setLoadingTripDetail(false);
+  };
 
   // Poll nearby available rickshaws for Discovery Radar (every 5 seconds)
   const fetchNearbyRickshaws = useCallback(async () => {
@@ -507,474 +543,545 @@ export const PassengerDashboardView: React.FC = () => {
         </View>
       </View>
 
-      {/* PRIMARY FEATURE: PASSENGER DISCOVERY RADAR MAP CARD */}
-      <Card variant="elevated" style={styles.radarCard}>
-        <CardHeader
-          title="Passenger Discovery Radar"
-          subtitle={
-            currentLoc && sharingStatus === 'LOCATION_ACTIVE'
-              ? `Live Dhaka sector radar • Searching within 2 km of your position`
-              : 'Live Dhaka sector radar • Displaying available operational rickshaws'
-          }
-          action={
-            <Badge
-              label={`${nearbyRickshaws.length} AVAILABLE`}
-              variant={nearbyRickshaws.length > 0 ? 'success' : 'neutral'}
+      {/* Navigation Tab Bar */}
+      <View style={styles.tabNavRow}>
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            { backgroundColor: activeTab === 'RADAR' ? colors.primary : colors.surfaceElevated, borderColor: activeTab === 'RADAR' ? colors.primary : colors.border },
+          ]}
+          onPress={() => setActiveTab('RADAR')}
+        >
+          <Icon name="map-pin" size={16} color={activeTab === 'RADAR' ? '#FFFFFF' : colors.textSecondary} />
+          <Text style={[styles.tabButtonText, { color: activeTab === 'RADAR' ? '#FFFFFF' : colors.textSecondary }]}>
+            Live Discovery Radar
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tabButton,
+            { backgroundColor: activeTab === 'HISTORY' ? colors.primary : colors.surfaceElevated, borderColor: activeTab === 'HISTORY' ? colors.primary : colors.border },
+          ]}
+          onPress={() => {
+            setActiveTab('HISTORY');
+            loadPassengerHistory();
+          }}
+        >
+          <Icon name="clock" size={16} color={activeTab === 'HISTORY' ? '#FFFFFF' : colors.textSecondary} />
+          <Text style={[styles.tabButtonText, { color: activeTab === 'HISTORY' ? '#FFFFFF' : colors.textSecondary }]}>
+            Trip History ({tripHistory.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* TAB 1: LIVE DISCOVERY RADAR & ACTIVE RIDE */}
+      {activeTab === 'RADAR' && (
+        <>
+          {/* PRIMARY FEATURE: PASSENGER DISCOVERY RADAR MAP CARD */}
+          <Card variant="elevated" style={styles.radarCard}>
+            <CardHeader
+              title="Passenger Discovery Radar"
+              subtitle={
+                currentLoc && sharingStatus === 'LOCATION_ACTIVE'
+                  ? `Live Dhaka sector radar • Searching within 2 km of your position`
+                  : 'Live Dhaka sector radar • Displaying available operational rickshaws'
+              }
+              action={
+                <Badge
+                  label={`${nearbyRickshaws.length} AVAILABLE`}
+                  variant={nearbyRickshaws.length > 0 ? 'success' : 'neutral'}
+                />
+              }
             />
-          }
-        />
-        <CardBody style={styles.radarBody}>
-          {/* Real Interactive Discovery Map (Renders live assigned driver location during active trip) */}
-          {(() => {
-            const activeDriverMarker: NearbyRickshaw | null =
-              activeRide &&
-              activeRide.driverLocation &&
-              ['ACCEPTED', 'ACTIVE', 'WAITING_PASSENGER_CONFIRM'].includes(activeRide.status)
-                ? {
-                    id: activeRide.id,
-                    driverId: (activeRide.driverId as any)?._id || 'driver',
-                    driverName: (activeRide.driverId as any)?.name || 'Assigned Driver',
-                    driverPhone: (activeRide.driverId as any)?.phone || 'N/A',
-                    vehicleId: (activeRide.vehicleId as any)?._id || 'vehicle',
-                    customVehicleId: (activeRide.vehicleId as any)?.shortVehicleNumber || 'Rickshaw',
-                    shortVehicleNumber: (activeRide.vehicleId as any)?.shortVehicleNumber || 'Rickshaw',
-                    registrationNumber: (activeRide.vehicleId as any)?.registrationNumber || 'N/A',
-                    qrIdentifier: 'ASSIGNED_VEHICLE',
-                    ownershipType: 'APPROVED',
-                    modelName: 'Electric Rickshaw',
-                    verificationStatus: 'APPROVED',
-                    status: activeRide.status,
-                    latitude: activeRide.driverLocation.latitude,
-                    longitude: activeRide.driverLocation.longitude,
-                    accuracy: activeRide.driverLocation.accuracy,
-                    speed: activeRide.driverLocation.speed,
-                    heading: activeRide.driverLocation.heading,
-                    distanceKm: null,
-                    avgRating: null,
-                    ratingsCount: 0,
-                    completedRidesCount: 0,
-                    isDriverVerifiedForVehicle: true,
-                    updatedAt: activeRide.driverLocation.updatedAt,
-                  }
-                : null;
+            <CardBody style={styles.radarBody}>
+              {/* Real Interactive Discovery Map */}
+              {(() => {
+                const activeDriverMarker: NearbyRickshaw | null =
+                  activeRide &&
+                  activeRide.driverLocation &&
+                  ['ACCEPTED', 'ACTIVE', 'WAITING_PASSENGER_CONFIRM'].includes(activeRide.status)
+                    ? {
+                        id: activeRide.id,
+                        driverId: (activeRide.driverId as any)?._id || 'driver',
+                        driverName: (activeRide.driverId as any)?.name || 'Assigned Driver',
+                        driverPhone: (activeRide.driverId as any)?.phone || 'N/A',
+                        vehicleId: (activeRide.vehicleId as any)?._id || 'vehicle',
+                        customVehicleId: (activeRide.vehicleId as any)?.shortVehicleNumber || 'Rickshaw',
+                        shortVehicleNumber: (activeRide.vehicleId as any)?.shortVehicleNumber || 'Rickshaw',
+                        registrationNumber: (activeRide.vehicleId as any)?.registrationNumber || 'N/A',
+                        qrIdentifier: 'ASSIGNED_VEHICLE',
+                        ownershipType: 'APPROVED',
+                        modelName: 'Electric Rickshaw',
+                        verificationStatus: 'APPROVED',
+                        status: activeRide.status,
+                        latitude: activeRide.driverLocation.latitude,
+                        longitude: activeRide.driverLocation.longitude,
+                        accuracy: activeRide.driverLocation.accuracy,
+                        speed: activeRide.driverLocation.speed,
+                        heading: activeRide.driverLocation.heading,
+                        distanceKm: null,
+                        avgRating: null,
+                        ratingsCount: 0,
+                        completedRidesCount: 0,
+                        isDriverVerifiedForVehicle: true,
+                        updatedAt: activeRide.driverLocation.updatedAt,
+                      }
+                    : null;
 
-            const mapRickshawMarkers = activeDriverMarker
-              ? [activeDriverMarker, ...nearbyRickshaws.filter((r) => r.vehicleId !== (activeRide?.vehicleId as any)?._id)]
-              : nearbyRickshaws;
+                const mapRickshawMarkers = activeDriverMarker
+                  ? [activeDriverMarker, ...nearbyRickshaws.filter((r) => r.vehicleId !== (activeRide?.vehicleId as any)?._id)]
+                  : nearbyRickshaws;
 
-            const activeRoutePolyline =
-              activeRide?.routePoints && activeRide.routePoints.length > 1
-                ? activeRide.routePoints.map((pt) => [pt.coordinates[1], pt.coordinates[0]] as [number, number])
-                : undefined;
+                const activeRoutePolyline =
+                  activeRide?.routePoints && activeRide.routePoints.length > 1
+                    ? activeRide.routePoints.map((pt) => [pt.coordinates[1], pt.coordinates[0]] as [number, number])
+                    : undefined;
 
-            return (
-              <RealMapContainer
-                latitude={currentLoc?.latitude ?? 23.8103}
-                longitude={currentLoc?.longitude ?? 90.4125}
-                accuracy={currentLoc?.accuracy}
-                status={sharingStatus}
-                title="Dhaka Electric Rickshaw Discovery Radar"
-                subtitle={
-                  activeRide && activeDriverMarker
-                    ? `Live Ride Telemetry • Driver ${activeDriverMarker.driverName} (${activeDriverMarker.shortVehicleNumber})`
-                    : currentLoc && sharingStatus === 'LOCATION_ACTIVE'
-                    ? `Position: [${currentLoc.latitude.toFixed(4)}, ${currentLoc.longitude.toFixed(4)}] • 2 km Radius Stream`
-                    : 'Showing Available Operational Rickshaws across Dhaka Sector'
-                }
-                height={420}
-                allowExpand={true}
-                rickshawMarkers={mapRickshawMarkers}
-                routePolyline={activeRoutePolyline}
-                isPassengerView={true}
-                onTargetedRequest={handleTargetedRideRequest}
-              />
-            );
-          })()}
+                return (
+                  <RealMapContainer
+                    latitude={currentLoc?.latitude ?? 23.8103}
+                    longitude={currentLoc?.longitude ?? 90.4125}
+                    accuracy={currentLoc?.accuracy}
+                    status={sharingStatus}
+                    title="Dhaka Electric Rickshaw Discovery Radar"
+                    subtitle={
+                      activeRide && activeDriverMarker
+                        ? `Live Ride Telemetry • Driver ${activeDriverMarker.driverName} (${activeDriverMarker.shortVehicleNumber})`
+                        : currentLoc && sharingStatus === 'LOCATION_ACTIVE'
+                        ? `Position: [${currentLoc.latitude.toFixed(4)}, ${currentLoc.longitude.toFixed(4)}] • 2 km Radius Stream`
+                        : 'Showing Available Operational Rickshaws across Dhaka Sector'
+                    }
+                    height={420}
+                    allowExpand={true}
+                    rickshawMarkers={mapRickshawMarkers}
+                    routePolyline={activeRoutePolyline}
+                    isPassengerView={true}
+                    onTargetedRequest={handleTargetedRideRequest}
+                  />
+                );
+              })()}
 
-          {/* COMPACT CUSTOMER-FACING LOCATION STATUS BAR (Unified Single Source of Truth) */}
-          <View style={[styles.compactStatusBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-            <View style={styles.statusLeftRow}>
-              <View
-                style={[
-                  styles.statusIndicatorDot,
-                  {
-                    backgroundColor:
-                      sharingStatus === 'LOCATION_ACTIVE'
-                        ? currentLoc?.accuracy && currentLoc.accuracy > 50
-                          ? '#F59E0B' // Low accuracy warning
-                          : '#10B981' // Active green
-                        : permissionStatus === 'Denied'
-                        ? '#EF4444' // Denied red
-                        : '#9CA3AF', // Inactive gray
-                  },
-                ]}
-              />
-              <View style={styles.statusTextCol}>
-                <Text style={[styles.statusPrimaryText, { color: colors.textPrimary }]}>
-                  {sharingStatus === 'LOCATION_ACTIVE'
-                    ? currentLoc?.accuracy && currentLoc.accuracy > 50
-                      ? 'Location accuracy is low'
-                      : 'Location active'
-                    : permissionStatus === 'Denied'
-                    ? 'Location access is off'
-                    : 'Location needed for discovery'}
-                </Text>
-                <Text style={[styles.statusSubText, { color: colors.textSecondary }]}>
-                  {sharingStatus === 'LOCATION_ACTIVE'
-                    ? currentLoc?.accuracy
-                      ? `Accuracy ±${currentLoc.accuracy.toFixed(0)} m • Updating automatically`
-                      : 'Position synchronized'
-                    : permissionStatus === 'Denied'
-                    ? 'Enable location to discover nearby rickshaws within 2 km.'
-                    : 'Enable location for accurate pickup dispatch.'}
-                </Text>
-              </View>
-            </View>
-
-            {sharingStatus !== 'LOCATION_ACTIVE' && (
-              <Button
-                title="Enable Location"
-                variant="primary"
-                size="sm"
-                loading={startingSharing}
-                icon={<Icon name="navigation" size={14} color="#FFFFFF" />}
-                onPress={handleStartSharing}
-              />
-            )}
-
-            {/* Discreet Dev Simulator Link */}
-            <TouchableOpacity
-              style={styles.devSimToggleBtn}
-              onPress={() => setShowSimPanel(!showSimPanel)}
-            >
-              <Text style={[styles.devSimToggleText, { color: colors.textMuted }]}>
-                {showSimPanel ? 'Hide Dev Tool' : 'Dev Location Tool'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Expandable Dev Location Simulator Panel */}
-          {showSimPanel && (
-            <View style={[styles.simBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-              <Text style={[styles.simHeader, { color: colors.primary }]}>
-                Dev Location Simulator
-              </Text>
-
-              <View style={styles.presetRow}>
-                <TouchableOpacity
-                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => {
-                    setSimLat('23.8103');
-                    setSimLng('90.4125');
-                  }}
-                >
-                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Dhaka Center</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => {
-                    setSimLat('23.7925');
-                    setSimLng('90.4078');
-                  }}
-                >
-                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Gulshan Circle</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => {
-                    setSimLat('23.7516');
-                    setSimLng('90.3782');
-                  }}
-                >
-                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Dhanmondi 27</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.simInputGrid}>
-                <View style={styles.simInputWrapper}>
-                  <Input label="Latitude" value={simLat} onChangeText={setSimLat} keyboardType="numeric" />
+              {/* COMPACT LOCATION STATUS BAR */}
+              <View style={[styles.compactStatusBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <View style={styles.statusLeftRow}>
+                  <View
+                    style={[
+                      styles.statusIndicatorDot,
+                      {
+                        backgroundColor:
+                          sharingStatus === 'LOCATION_ACTIVE'
+                            ? colors.success
+                            : colors.textMuted,
+                      },
+                    ]}
+                  />
+                  <View style={styles.statusTextCol}>
+                    <Text style={[styles.statusPrimaryText, { color: colors.textPrimary }]}>
+                      {sharingStatus === 'LOCATION_ACTIVE'
+                        ? 'Live GPS Sharing Active'
+                        : 'Location Sharing Disabled'}
+                    </Text>
+                    <Text style={[styles.statusSubText, { color: colors.textMuted }]}>
+                      {currentLoc
+                        ? `Lat ${currentLoc.latitude.toFixed(4)}, Lng ${currentLoc.longitude.toFixed(4)} • Updated ${
+                            lastUpdateTs ? lastUpdateTs.toLocaleTimeString() : 'Just now'
+                          }`
+                        : 'Tap Enable Location below to enable nearby discovery radar.'}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.simInputWrapper}>
-                  <Input label="Longitude" value={simLng} onChangeText={setSimLng} keyboardType="numeric" />
-                </View>
-              </View>
 
-              <View style={styles.simActionRow}>
-                <Button
-                  title="Send Simulated Coordinates"
-                  variant="outline"
-                  size="sm"
-                  icon={<Icon name="navigation" size={14} color={colors.textPrimary} />}
-                  onPress={handleSimulatedUpdate}
-                />
-              </View>
-            </View>
-          )}
-        </CardBody>
-      </Card>
-
-      {/* RIDE LIFECYCLE SECTION: ACTIVE TRIP OR OPTIONAL RIDE REQUEST CARD */}
-      {activeRide ? (
-        <Card variant="elevated" style={[styles.activeRideCard, { borderColor: colors.primary }]}>
-          <CardHeader
-            title={`Active Ride Lifecycle — ${activeRide.passengerPseudonym}`}
-            subtitle={`Ride ID: ${activeRide.rideId} • State: ${activeRide.status}`}
-            action={
-              <Badge
-                label={activeRide.status.replace(/_/g, ' ')}
-                variant={getRideStatusVariant(activeRide.status)}
-              />
-            }
-          />
-          <CardBody style={styles.activeRideBody}>
-            {/* Status Alerts */}
-            {activeRide.status === 'INITIATED' && (
-              <View style={[styles.alertBanner, { backgroundColor: colors.warningSurface, borderColor: colors.warning }]}>
-                <Icon name="clock" size={20} color={colors.warning} />
-                <View style={styles.alertTextWrapper}>
-                  <Text style={[styles.alertTitle, { color: colors.warning }]}>Searching for Nearby Drivers</Text>
-                  <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>
-                    Your pickup location [{activeRide.approximatePickupArea}] is dispatched to available drivers within a 15-second acceptance window.
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {activeRide.status === 'ACCEPTED' && (
-              <View style={[styles.alertBanner, { backgroundColor: colors.infoSurface, borderColor: colors.info }]}>
-                <Icon name="check-circle" size={20} color={colors.info} />
-                <View style={styles.alertTextWrapper}>
-                  <Text style={[styles.alertTitle, { color: colors.info }]}>Driver Assigned & En Route!</Text>
-                  <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>
-                    Driver {activeRide.driverId?.name || 'Assigned Driver'} ({activeRide.vehicleId?.shortVehicleNumber || 'Rickshaw'}) is navigating to your pickup location.
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {activeRide.status === 'ACTIVE' && (
-              <View style={[styles.alertBanner, { backgroundColor: colors.successSurface, borderColor: colors.success }]}>
-                <Icon name="navigation" size={20} color={colors.success} />
-                <View style={styles.alertTextWrapper}>
-                  <Text style={[styles.alertTitle, { color: colors.success }]}>Trip in Progress</Text>
-                  <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>
-                    You are currently riding in vehicle {activeRide.vehicleId?.shortVehicleNumber || 'Rickshaw'}. Enjoy your secure ride!
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {activeRide.status === 'WAITING_PASSENGER_CONFIRM' && (
-              <View style={[styles.alertBanner, { backgroundColor: colors.primarySurface, borderColor: colors.primary }]}>
-                <Icon name="map-pin" size={20} color={colors.primary} />
-                <View style={styles.alertTextWrapper}>
-                  <Text style={[styles.alertTitle, { color: colors.primary }]}>Arrived at Destination — Drop-off Confirmation Needed</Text>
-                  <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>
-                    The driver has arrived at your drop-off point. Please confirm drop-off below to record final drop-off GPS coordinates.
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {/* Ride Details Grid */}
-            <View style={styles.telemetryGrid}>
-              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Trip Pseudonym</Text>
-                <Text style={[styles.telemetryVal, { color: colors.primary }]}>{activeRide.passengerPseudonym}</Text>
-              </View>
-
-              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Assigned Driver</Text>
-                <Text style={[styles.telemetryVal, { color: colors.textPrimary }]}>
-                  {activeRide.driverId ? activeRide.driverId.name : 'Awaiting Driver...'}
-                </Text>
-              </View>
-
-              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Electric Rickshaw</Text>
-                <Text style={[styles.telemetryVal, { color: colors.textPrimary }]}>
-                  {activeRide.vehicleId ? activeRide.vehicleId.shortVehicleNumber : 'N/A'}
-                </Text>
-              </View>
-
-              <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Destination</Text>
-                <Text style={[styles.telemetryVal, { color: colors.textSecondary }]}>
-                  {activeRide.destinationText || 'Open Destination'}
-                </Text>
-              </View>
-
-              {activeRide.distanceMeters !== undefined && (
-                <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                  <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Distance Traveled</Text>
-                  <Text style={[styles.telemetryVal, { color: colors.primary }]}>
-                    {(activeRide.distanceMeters / 1000).toFixed(2)} km ({activeRide.routePointCount || activeRide.routePoints?.length || 0} GPS pts)
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Pre-Active Cancel Request Action */}
-            {(activeRide.status === 'INITIATED' || activeRide.status === 'ACCEPTED') && (
-              <View style={{ marginTop: spacing.xs }}>
-                <Button
-                  title="Cancel Ride Request"
-                  variant="outline"
-                  size="md"
-                  loading={cancellingRide}
-                  icon={<Icon name="x" size={16} color={colors.textPrimary} />}
-                  onPress={handleCancelRide}
-                />
-              </View>
-            )}
-
-            {/* Drop-off Confirmation Button */}
-            {(activeRide.status === 'WAITING_PASSENGER_CONFIRM' || activeRide.status === 'ACTIVE') && (
-              <View style={{ marginTop: spacing.sm }}>
-                <Button
-                  title="Confirm Drop-Off & Finish Trip"
-                  variant="primary"
-                  size="lg"
-                  loading={confirmingCompletion}
-                  icon={<Icon name="check" size={18} color="#FFFFFF" />}
-                  onPress={handleConfirmCompletion}
-                />
-              </View>
-            )}
-
-            {/* PASSENGER SAFETY & EMERGENCY COMMAND SECTION (ONLY ON ACTIVE RIDES) */}
-            <View style={[styles.safetyContainer, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-              <View style={styles.safetyHeaderRow}>
-                <Icon name="shield" size={18} color={colors.primary} />
-                <Text style={[styles.safetyHeaderTitle, { color: colors.textPrimary }]}>
-                  Safety & Emergency Command
-                </Text>
-                {isHighFrequencyTracking && (
-                  <Badge label="HIGH-FREQ GPS ACTIVE" variant="danger" />
+                {sharingStatus !== 'LOCATION_ACTIVE' && (
+                  <Button
+                    title={startingSharing ? 'Enabling...' : 'Enable Location'}
+                    variant="primary"
+                    size="sm"
+                    loading={startingSharing}
+                    onPress={handleStartSharing}
+                  />
                 )}
               </View>
-              <Text style={[styles.safetyHeaderDesc, { color: colors.textSecondary }]}>
-                Immediate multi-tier safety controls for authenticated active rides.
-              </Text>
 
-              {/* Primary Safety Action Buttons Grid */}
-              <View style={styles.safetyButtonsGrid}>
-                {/* Yellow Safety Alert */}
-                <TouchableOpacity
-                  style={[styles.yellowSafetyBtn, { backgroundColor: '#D97706' }]}
-                  onPress={handleYellowAlert}
-                  disabled={yellowLoading}
-                  activeOpacity={0.8}
-                >
-                  <Icon name="alert-triangle" size={18} color="#FFFFFF" />
-                  <Text style={styles.yellowSafetyText}>
-                    {yellowLoading ? 'Sending Alert...' : 'Yellow Safety Alert'}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Red Emergency SOS */}
-                <TouchableOpacity
-                  style={[styles.redSosBtn, { backgroundColor: '#DC2626' }]}
-                  onPress={() => setShowRedConfirmModal(true)}
-                  disabled={redLoading}
-                  activeOpacity={0.8}
-                >
-                  <Icon name="shield" size={18} color="#FFFFFF" />
-                  <Text style={styles.redSosText}>
-                    {redLoading ? 'Activating SOS...' : 'RED Emergency SOS'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Secondary Safety Actions */}
-              <View style={styles.secondarySafetyRow}>
-                <Button
-                  title="999 Emergency Call"
-                  variant="outline"
-                  size="sm"
-                  icon={<Icon name="phone" size={14} color={colors.danger} />}
-                  onPress={handle999EmergencyCall}
-                />
-                <Button
-                  title="Emergency SMS"
-                  variant="outline"
-                  size="sm"
-                  icon={<Icon name="message-square" size={14} color={colors.warning} />}
-                  onPress={handleEmergencySmsLaunch}
-                />
-                <Button
-                  title="Safety Override & Terminate"
-                  variant="danger"
-                  size="sm"
-                  loading={overrideLoading}
-                  icon={<Icon name="x-circle" size={14} color="#FFFFFF" />}
-                  onPress={handlePassengerOverrideTerminate}
-                />
-              </View>
-            </View>
-          </CardBody>
-        </Card>
-      ) : (
-        /* OPTIONAL RIDE REQUEST CARD */
-        <Card variant="elevated" style={styles.requestCard}>
-          <CardHeader
-            title="Request an Electric Rickshaw"
-            subtitle="Broadcast ride request to nearby discovered rickshaws"
-            action={<Badge label="ACTION CARD" variant="info" />}
-          />
-          <CardBody style={styles.requestBody}>
-            <Input
-              label="Destination Reference (Optional landmark description)"
-              placeholder="e.g. Gulshan-2 Circle, Dhanmondi 27, Banani Block 11..."
-              value={destinationText}
-              onChangeText={setDestinationText}
-            />
-
-            <View style={styles.requestActionRow}>
-              <Button
-                title="Request Electric Rickshaw"
-                variant="primary"
-                size="lg"
-                loading={requestingRide}
-                disabled={!currentLoc || sharingStatus !== 'LOCATION_ACTIVE'}
-                icon={<Icon name="navigation" size={18} color="#FFFFFF" />}
-                onPress={handleRequestRide}
-              />
-              {(sharingStatus !== 'LOCATION_ACTIVE' || !currentLoc) && (
-                <View style={styles.reqLocationNoticeRow}>
-                  <Text style={[styles.locNoticeText, { color: colors.textSecondary }]}>
-                    ℹ️ Location access is required to request pickup to your position.
-                  </Text>
-                  <TouchableOpacity onPress={handleStartSharing}>
-                    <Text style={{ fontWeight: '700', color: colors.primary, fontSize: 12 }}>
-                      Enable Location →
-                    </Text>
-                  </TouchableOpacity>
+              {locationError && (
+                <View style={[styles.alertBanner, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}>
+                  <Icon name="alert-circle" size={18} color="#DC2626" />
+                  <Text style={{ fontSize: 13, color: '#991B1B' }}>{locationError}</Text>
                 </View>
               )}
-            </View>
+            </CardBody>
+          </Card>
+
+          {/* RIDE REQUEST CARD */}
+          {!activeRide && (
+            <Card variant="elevated" style={styles.requestCard}>
+              <CardHeader
+                title="Request Electric Rickshaw"
+                subtitle="Broadcast pickup request to nearest available Dhaka rickshaw driver"
+              />
+              <CardBody style={styles.requestBody}>
+                <Input
+                  label="Destination (Optional)"
+                  placeholder="Enter destination area, landmark, or sector..."
+                  value={destinationText}
+                  onChangeText={setDestinationText}
+                />
+
+                <View style={styles.requestActionRow}>
+                  <Button
+                    title={requestingRide ? 'Dispatching Request...' : 'Request Nearest Rickshaw'}
+                    variant="primary"
+                    size="lg"
+                    loading={requestingRide}
+                    disabled={sharingStatus !== 'LOCATION_ACTIVE' || requestingRide}
+                    onPress={handleRequestRide}
+                  />
+                  {sharingStatus !== 'LOCATION_ACTIVE' && (
+                    <Text style={[styles.locNoticeText, { color: colors.warning }]}>
+                      Location sharing must be active to request pickup.
+                    </Text>
+                  )}
+                </View>
+              </CardBody>
+            </Card>
+          )}
+
+          {/* ACTIVE RIDE CARD */}
+          {activeRide && (
+            <Card variant="elevated" style={[styles.activeRideCard, { borderColor: colors.primary }]}>
+              <CardHeader
+                title={`Active Ride Lifecycle (${activeRide.passengerPseudonym})`}
+                subtitle={`Ride ID: ${activeRide.rideId || activeRide.id}`}
+                action={<Badge label={activeRide.status} variant={getRideStatusVariant(activeRide.status)} />}
+              />
+              <CardBody style={styles.activeRideBody}>
+                <View style={styles.telemetryGrid}>
+                  <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                    <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Assigned Driver</Text>
+                    <Text style={[styles.telemetryVal, { color: colors.textPrimary }]}>
+                      {activeRide.driverId?.name || 'Searching...'}
+                    </Text>
+                  </View>
+                  <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                    <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Vehicle Number</Text>
+                    <Text style={[styles.telemetryVal, { color: colors.primary }]}>
+                      {activeRide.vehicleId?.shortVehicleNumber || 'Assigned Rickshaw'}
+                    </Text>
+                  </View>
+                  <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                    <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Pickup Location Area</Text>
+                    <Text style={[styles.telemetryVal, { color: colors.textPrimary }]}>
+                      {activeRide.approximatePickupArea || 'GPS Coordinates Locked'}
+                    </Text>
+                  </View>
+                </View>
+
+                {activeRide.status === 'INITIATED' && (
+                  <View style={styles.modalActionRow}>
+                    <Button
+                      title={cancellingRide ? 'Cancelling...' : 'Cancel Request'}
+                      variant="outline"
+                      size="md"
+                      loading={cancellingRide}
+                      onPress={handleCancelRide}
+                    />
+                  </View>
+                )}
+
+                {activeRide.status === 'WAITING_PASSENGER_CONFIRM' && (
+                  <View style={[styles.alertBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.primary }]}>
+                    <Icon name="check-circle" size={24} color={colors.primary} />
+                    <View style={styles.alertTextWrapper}>
+                      <Text style={[styles.alertTitle, { color: colors.textPrimary }]}>Driver Requested Ride Drop-off</Text>
+                      <Text style={[styles.alertDesc, { color: colors.textSecondary }]}>
+                        Driver has indicated drop-off completion. Please confirm drop-off to finalize the journey.
+                      </Text>
+                    </View>
+                    <Button
+                      title={confirmingCompletion ? 'Confirming...' : 'Confirm Drop-off'}
+                      variant="primary"
+                      size="md"
+                      loading={confirmingCompletion}
+                      onPress={handleConfirmCompletion}
+                    />
+                  </View>
+                )}
+
+                {/* SAFETY & SOS COMMAND SECTION */}
+                <View style={[styles.safetyContainer, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                  <View style={styles.safetyHeaderRow}>
+                    <Icon name="shield" size={20} color={colors.primary} />
+                    <Text style={[styles.safetyHeaderTitle, { color: colors.textPrimary }]}>Safety & Emergency Controls</Text>
+                  </View>
+                  <Text style={[styles.safetyHeaderDesc, { color: colors.textSecondary }]}>
+                    In case of unsafe driving, dispute, or emergency, trigger live alert escalation to operations.
+                  </Text>
+                  <View style={styles.safetyButtonsGrid}>
+                    <TouchableOpacity
+                      style={[styles.yellowSafetyBtn, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}
+                      onPress={handleYellowAlert}
+                      disabled={yellowLoading}
+                    >
+                      <Icon name="alert-triangle" size={18} color="#D97706" />
+                      <Text style={{ fontWeight: '700', color: '#B45309' }}>
+                        {yellowLoading ? 'Alerting...' : 'Yellow Safety Alert'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.yellowSafetyBtn, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}
+                      onPress={() => setShowRedConfirmModal(true)}
+                      disabled={redLoading}
+                    >
+                      <Icon name="alert-circle" size={18} color="#DC2626" />
+                      <Text style={{ fontWeight: '800', color: '#991B1B' }}>
+                        {redLoading ? 'Triggering...' : 'RED EMERGENCY SOS'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </CardBody>
+            </Card>
+          )}
+        </>
+      )}
+
+      {/* TAB 2: PASSENGER TRIP HISTORY & JOURNEY RECORDS */}
+      {activeTab === 'HISTORY' && (
+        <Card variant="elevated">
+          <CardHeader
+            title="Completed Trip History"
+            subtitle="Permanent journey records with verified telemetry paths & drop-off locations"
+          />
+          <CardBody style={{ gap: spacing.md }}>
+            {loadingHistory ? (
+              <LoadingState message="Fetching your completed trip records..." />
+            ) : tripHistory.length === 0 ? (
+              <EmptyState
+                title="No Completed Trips Yet"
+                description="Your completed electric rickshaw rides and journey telemetry maps will appear here."
+              />
+            ) : (
+              tripHistory.map((trip) => (
+                <View
+                  key={trip.id}
+                  style={[
+                    styles.tripCardItem,
+                    { backgroundColor: colors.surfaceElevated, borderColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.tripCardHeader}>
+                    <View style={styles.tripCardRefRow}>
+                      <Icon name="navigation" size={18} color={colors.primary} />
+                      <Text style={[styles.tripCardRefText, { color: colors.textPrimary }]}>
+                        {trip.rideId}
+                      </Text>
+                      <Badge label={trip.status} variant="success" />
+                      {trip.hasSafetyEvent && (
+                        <Badge label="SAFETY ALERT" variant="warning" />
+                      )}
+                    </View>
+                    <Text style={[styles.tripDateText, { color: colors.textMuted }]}>
+                      {trip.completedAt ? new Date(trip.completedAt).toLocaleString() : new Date(trip.requestedAt).toLocaleString()}
+                    </Text>
+                  </View>
+
+                  <View style={styles.tripDetailGrid}>
+                    <View style={styles.tripDetailCol}>
+                      <Text style={[styles.tripDetailLabel, { color: colors.textMuted }]}>Vehicle & Driver</Text>
+                      <Text style={[styles.tripDetailVal, { color: colors.textPrimary }]}>
+                        Vehicle {trip.shortVehicleNumber} • {trip.driverName || 'Driver'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.tripDetailCol}>
+                      <Text style={[styles.tripDetailLabel, { color: colors.textMuted }]}>Pickup Area</Text>
+                      <Text style={[styles.tripDetailVal, { color: colors.textPrimary }]}>
+                        {trip.approximatePickupArea || 'GPS Pickup Point'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.tripDetailCol}>
+                      <Text style={[styles.tripDetailLabel, { color: colors.textMuted }]}>Distance & Duration</Text>
+                      <Text style={[styles.tripDetailVal, { color: colors.textPrimary }]}>
+                        {(trip.distanceMeters / 1000).toFixed(2)} km • {Math.round(trip.durationSeconds / 60)} mins
+                      </Text>
+                    </View>
+
+                    <View style={styles.tripDetailCol}>
+                      <Text style={[styles.tripDetailLabel, { color: colors.textMuted }]}>Fare & Settlement</Text>
+                      <Text style={[styles.tripDetailVal, { color: colors.primary }]}>
+                        ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.tripCardFooter}>
+                    {trip.passengerRating ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={{ color: '#F59E0B', fontWeight: '800' }}>★ {trip.passengerRating}.0</Text>
+                        <Text style={{ color: colors.textMuted, fontSize: 12 }}>(Rated)</Text>
+                      </View>
+                    ) : (
+                      <Text style={{ color: colors.textMuted, fontSize: 12 }}>Unrated</Text>
+                    )}
+
+                    <Button
+                      title="Inspect Journey Map"
+                      variant="outline"
+                      size="sm"
+                      onPress={() => handleOpenTripDetail(trip.id)}
+                    />
+                  </View>
+                </View>
+              ))
+            )}
           </CardBody>
         </Card>
       )}
+
+      {/* MODAL: DETAILED HISTORICAL JOURNEY & MAP */}
+      <Modal
+        visible={showTripModal}
+        onClose={() => {
+          setShowTripModal(false);
+          setSelectedTrip(null);
+        }}
+        title={`Journey Record: ${selectedTrip?.rideId || 'Trip Detail'}`}
+      >
+        {loadingTripDetail || !selectedTrip ? (
+          <LoadingState message="Loading historical journey telemetry & route map..." />
+        ) : (
+          <ScrollView style={{ maxHeight: 540 }}>
+            <View style={{ gap: spacing.md }}>
+              <RealMapContainer
+                isHistoricalView={true}
+                title={`Historical Path: ${selectedTrip.rideId}`}
+                subtitle={`Official GPS Telemetry Path • ${selectedTrip.routePointCount || selectedTrip.routePoints?.length || 0} Coordinates`}
+                height={300}
+                startLocation={
+                  selectedTrip.pickupLocation
+                    ? {
+                        latitude: selectedTrip.pickupLocation.coordinates[1],
+                        longitude: selectedTrip.pickupLocation.coordinates[0],
+                        label: 'Pickup Coordinates',
+                      }
+                    : undefined
+                }
+                endLocation={
+                  selectedTrip.endCoordinates
+                    ? {
+                        latitude: selectedTrip.endCoordinates.coordinates[1],
+                        longitude: selectedTrip.endCoordinates.coordinates[0],
+                        label: 'Official Drop-off (endCoordinates)',
+                      }
+                    : undefined
+                }
+                routePolyline={
+                  selectedTrip.routePoints && selectedTrip.routePoints.length > 1
+                    ? selectedTrip.routePoints.map((pt) => [pt.coordinates[1], pt.coordinates[0]])
+                    : undefined
+                }
+              />
+
+              <View style={[styles.detailSection, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Text style={[styles.detailSectionTitle, { color: colors.primary }]}>Trip & Driver Identity</Text>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Trip Reference ID:</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedTrip.rideId}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Vehicle Short Code:</Text>
+                  <Text style={[styles.detailVal, { color: colors.primary }]}>Vehicle {selectedTrip.shortVehicleNumber}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Assigned Driver:</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedTrip.driverName || 'N/A'}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Driver Phone Contact:</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedTrip.driverPhone || 'N/A'}</Text>
+                </View>
+                {selectedTrip.garageName && (
+                  <View style={styles.detailRow}>
+                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Registered Garage:</Text>
+                    <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedTrip.garageName}</Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={[styles.detailSection, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Text style={[styles.detailSectionTitle, { color: colors.primary }]}>Telemetry & Drop-off Verification</Text>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Approximate Pickup Area:</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedTrip.approximatePickupArea || 'GPS Coords'}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Official Drop-off Coords:</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                    {selectedTrip.endLatitude && selectedTrip.endLongitude
+                      ? `[${selectedTrip.endLatitude.toFixed(4)}, ${selectedTrip.endLongitude.toFixed(4)}]`
+                      : 'End Coordinates Logged'}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Verified Route Distance:</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                    {(selectedTrip.distanceMeters / 1000).toFixed(2)} km ({selectedTrip.routePointCount || selectedTrip.routePoints?.length || 0} telemetry points)
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Journey Duration:</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                    {Math.round(selectedTrip.durationSeconds / 60)} minutes
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.detailSection, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                <Text style={[styles.detailSectionTitle, { color: colors.primary }]}>Settlement & Payment</Text>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Final Fare Amount:</Text>
+                  <Text style={[styles.detailVal, { color: colors.primary, fontWeight: '800' }]}>৳{selectedTrip.fareAmount || 0}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Payment Method:</Text>
+                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedTrip.paymentMethod || 'CASH'}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Settlement Status:</Text>
+                  <Badge label={selectedTrip.settlement?.status || 'SETTLED'} variant="success" />
+                </View>
+              </View>
+
+              {selectedTrip.safetyEvent && (
+                <View style={[styles.detailSection, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}>
+                  <Text style={[styles.detailSectionTitle, { color: '#DC2626' }]}>Safety Event Logged</Text>
+                  <Text style={{ color: '#991B1B', fontSize: 13 }}>
+                    Severity: {selectedTrip.safetyEvent.severity} • Event: {selectedTrip.safetyEvent.eventType} • Status: {selectedTrip.safetyEvent.status}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        )}
+      </Modal>
 
       {/* MODAL 1: RED EMERGENCY SOS CONFIRMATION */}
       <Modal
         visible={showRedConfirmModal}
         onClose={() => setShowRedConfirmModal(false)}
-        title="Trigger RED Emergency SOS"
+        title="Trigger Emergency Red SOS"
       >
         <View style={styles.modalContentCol}>
           <View style={styles.modalWarningHeader}>
-            <Icon name="shield" size={28} color={colors.danger} />
-            <Text style={[styles.modalWarningTitle, { color: colors.danger }]}>
-              Confirm High-Priority Emergency Trigger
+            <Icon name="alert-circle" size={28} color="#DC2626" />
+            <Text style={[styles.modalWarningTitle, { color: '#DC2626' }]}>
+              Immediate Emergency Escalation
             </Text>
           </View>
-          <Text style={[styles.modalBodyText, { color: colors.textSecondary }]}>
-            This action instantly creates an urgent <Text style={{ fontWeight: '700', color: colors.danger }}>RED SOS Event</Text>.
-            Operations Command Center will be notified immediately, high-frequency GPS tracking will be engaged, emergency SMS alerts will be generated, and eligible active units within 500 meters will be queried.
+          <Text style={[styles.modalBodyText, { color: colors.textPrimary }]}>
+            Activating Red Emergency SOS will instantly notify operations and escalate live tracking.
           </Text>
           <View style={styles.modalActionRow}>
             <Button
@@ -988,7 +1095,6 @@ export const PassengerDashboardView: React.FC = () => {
               variant="danger"
               size="md"
               loading={redLoading}
-              icon={<Icon name="shield" size={16} color="#FFFFFF" />}
               onPress={handleRedSOSConfirm}
             />
           </View>
@@ -1009,14 +1115,8 @@ export const PassengerDashboardView: React.FC = () => {
             </Text>
           </View>
           <Text style={[styles.modalBodyText, { color: colors.textSecondary }]}>
-            Dial <Text style={{ fontWeight: '800', color: colors.primary }}>999</Text> directly on your mobile device keypad to reach National Emergency Services in Bangladesh (Police, Fire, Ambulance).
+            Dial <Text style={{ fontWeight: '800', color: colors.primary }}>999</Text> directly on your mobile device keypad.
           </Text>
-          <View style={styles.emergencyBox}>
-            <Text style={[styles.emergencyBoxNumber, { color: colors.primary }]}>999</Text>
-            <Text style={[styles.emergencyBoxSub, { color: colors.textMuted }]}>
-              Toll-Free 24/7 Emergency Dispatch
-            </Text>
-          </View>
           <View style={styles.modalActionRow}>
             <Button
               title="Close Emergency Help"
@@ -1320,5 +1420,100 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
+  },
+  tabNavRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  tabButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  tripCardItem: {
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    gap: spacing.sm,
+  },
+  tripCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  tripCardRefRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  tripCardRefText: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  tripDateText: {
+    fontSize: 12,
+  },
+  tripDetailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  tripDetailCol: {
+    flex: 1,
+    minWidth: 140,
+  },
+  tripDetailLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  tripDetailVal: {
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  tripCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  detailSection: {
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+  },
+  detailSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: spacing.xs,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailLabel: {
+    fontSize: 12,
+  },
+  detailVal: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

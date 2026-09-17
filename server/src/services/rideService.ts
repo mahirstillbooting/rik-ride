@@ -3,6 +3,10 @@ import { Ride, IRide, RideStatus } from '../models/Ride';
 import { User } from '../models/User';
 import { DriverLocation } from '../models/DriverLocation';
 import { PassengerLocation } from '../models/PassengerLocation';
+import { Garage } from '../models/Garage';
+import { Rating } from '../models/Rating';
+import { SettlementRecord } from '../models/SettlementRecord';
+import { SafetyEvent } from '../models/SafetyEvent';
 import { locationService } from './locationService';
 import { passengerLocationService } from './passengerLocationService';
 
@@ -758,6 +762,593 @@ export class RideService {
       success: true,
       activeRides,
       totalActiveRides: activeRides.length,
+    };
+  }
+
+  /**
+   * Passenger Trip History: Fetch paginated completed rides for authenticated passenger
+   */
+  public async getPassengerTripHistory(passengerId: string, options?: {
+    page?: number;
+    limit?: number;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    const page = Math.max(1, options?.page || 1);
+    const limit = Math.min(100, Math.max(1, options?.limit || 20));
+    const skip = (page - 1) * limit;
+
+    const filter: any = {
+      passengerId: new Types.ObjectId(passengerId),
+      status: 'COMPLETED',
+    };
+
+    if (options?.startDate || options?.endDate) {
+      filter.completedAt = {};
+      if (options.startDate) filter.completedAt.$gte = new Date(options.startDate);
+      if (options.endDate) filter.completedAt.$lte = new Date(options.endDate);
+    }
+
+    const [rides, totalCount] = await Promise.all([
+      Ride.find(filter)
+        .populate('driverId', 'name phone')
+        .populate('vehicleId', 'shortVehicleNumber registrationNumber modelName')
+        .sort({ completedAt: -1, requestedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Ride.countDocuments(filter),
+    ]);
+
+    const rideIds = rides.map((r) => r._id);
+    const safetyEvents = await SafetyEvent.find({ rideId: { $in: rideIds } }).select('rideId severity status').lean();
+    const safetyEventRideIds = new Set(safetyEvents.map((s) => s.rideId.toString()));
+
+    const items = rides.map((r: any) => {
+      const driver = r.driverId as any;
+      const vehicle = r.vehicleId as any;
+      const startedTime = r.startedAt ? new Date(r.startedAt).getTime() : new Date(r.requestedAt).getTime();
+      const completedTime = r.completedAt ? new Date(r.completedAt).getTime() : Date.now();
+      const durationSeconds = Math.max(0, Math.round((completedTime - startedTime) / 1000));
+
+      return {
+        id: r._id.toString(),
+        rideId: r.rideId,
+        status: r.status,
+        requestedAt: r.requestedAt,
+        startedAt: r.startedAt,
+        completedAt: r.completedAt,
+        approximatePickupArea: r.approximatePickupArea,
+        pickupLocation: r.pickupLocation,
+        endCoordinates: r.endCoordinates,
+        destinationText: r.destinationText,
+        vehicleId: vehicle?._id?.toString() || null,
+        shortVehicleNumber: vehicle?.shortVehicleNumber || 'N/A',
+        registrationNumber: vehicle?.registrationNumber || 'N/A',
+        modelName: vehicle?.modelName || 'Rickshaw',
+        driverId: driver?._id?.toString() || null,
+        driverName: driver?.name || 'Authorized Driver',
+        driverPhone: driver?.phone || '',
+        distanceMeters: r.distanceMeters || 0,
+        durationSeconds,
+        fareAmount: r.fareAmount,
+        currency: r.currency || 'BDT',
+        paymentMethod: r.paymentMethod || 'CASH',
+        passengerRating: r.passengerRating,
+        hasSafetyEvent: safetyEventRideIds.has(r._id.toString()),
+      };
+    });
+
+    return {
+      success: true,
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      trips: items,
+    };
+  }
+
+  /**
+   * Driver Trip History: Fetch paginated completed rides for authenticated driver (GARAGE & SELF_OWNED)
+   * Enforces privacy: Passenger name/phone are NOT exposed! Pseudonym used.
+   */
+  public async getDriverTripHistory(driverId: string, options?: {
+    page?: number;
+    limit?: number;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    const page = Math.max(1, options?.page || 1);
+    const limit = Math.min(100, Math.max(1, options?.limit || 20));
+    const skip = (page - 1) * limit;
+
+    const filter: any = {
+      driverId: new Types.ObjectId(driverId),
+      status: 'COMPLETED',
+    };
+
+    if (options?.startDate || options?.endDate) {
+      filter.completedAt = {};
+      if (options.startDate) filter.completedAt.$gte = new Date(options.startDate);
+      if (options.endDate) filter.completedAt.$lte = new Date(options.endDate);
+    }
+
+    const [rides, totalCount] = await Promise.all([
+      Ride.find(filter)
+        .populate('vehicleId', 'shortVehicleNumber registrationNumber modelName')
+        .sort({ completedAt: -1, requestedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Ride.countDocuments(filter),
+    ]);
+
+    const rideIds = rides.map((r) => r._id);
+    const safetyEvents = await SafetyEvent.find({ rideId: { $in: rideIds } }).select('rideId severity status').lean();
+    const safetyEventRideIds = new Set(safetyEvents.map((s) => s.rideId.toString()));
+
+    const items = rides.map((r: any) => {
+      const vehicle = r.vehicleId as any;
+      const startedTime = r.startedAt ? new Date(r.startedAt).getTime() : new Date(r.requestedAt).getTime();
+      const completedTime = r.completedAt ? new Date(r.completedAt).getTime() : Date.now();
+      const durationSeconds = Math.max(0, Math.round((completedTime - startedTime) / 1000));
+
+      return {
+        id: r._id.toString(),
+        rideId: r.rideId,
+        status: r.status,
+        requestedAt: r.requestedAt,
+        startedAt: r.startedAt,
+        completedAt: r.completedAt,
+        passengerPseudonym: r.passengerPseudonym,
+        approximatePickupArea: r.approximatePickupArea,
+        pickupLocation: r.pickupLocation,
+        endCoordinates: r.endCoordinates,
+        destinationText: r.destinationText,
+        vehicleId: vehicle?._id?.toString() || null,
+        shortVehicleNumber: vehicle?.shortVehicleNumber || 'N/A',
+        registrationNumber: vehicle?.registrationNumber || 'N/A',
+        modelName: vehicle?.modelName || 'Rickshaw',
+        distanceMeters: r.distanceMeters || 0,
+        durationSeconds,
+        fareAmount: r.fareAmount,
+        currency: r.currency || 'BDT',
+        paymentMethod: r.paymentMethod || 'CASH',
+        passengerRating: r.passengerRating, // aggregated/safe
+        hasSafetyEvent: safetyEventRideIds.has(r._id.toString()),
+      };
+    });
+
+    return {
+      success: true,
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      trips: items,
+    };
+  }
+
+  /**
+   * Garage Owner Trip History: Fetch completed rides for vehicles & drivers belonging to garage
+   */
+  public async getGarageTripHistory(garageOwnerId: string, options?: {
+    vehicleId?: string;
+    driverId?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Math.max(1, options?.page || 1);
+    const limit = Math.min(100, Math.max(1, options?.limit || 20));
+    const skip = (page - 1) * limit;
+
+    // Find garages owned by this user
+    const garages = await Garage.find({ ownerId: new Types.ObjectId(garageOwnerId) }).select('_id').lean();
+    const garageIds = garages.map((g) => g._id);
+
+    if (garageIds.length === 0) {
+      return { success: true, page, limit, totalCount: 0, totalPages: 0, trips: [] };
+    }
+
+    const filter: any = {
+      garageId: { $in: garageIds },
+      status: 'COMPLETED',
+    };
+
+    if (options?.vehicleId && Types.ObjectId.isValid(options.vehicleId)) {
+      filter.vehicleId = new Types.ObjectId(options.vehicleId);
+    }
+    if (options?.driverId && Types.ObjectId.isValid(options.driverId)) {
+      filter.driverId = new Types.ObjectId(options.driverId);
+    }
+    if (options?.startDate || options?.endDate) {
+      filter.completedAt = {};
+      if (options.startDate) filter.completedAt.$gte = new Date(options.startDate);
+      if (options.endDate) filter.completedAt.$lte = new Date(options.endDate);
+    }
+
+    const [rides, totalCount] = await Promise.all([
+      Ride.find(filter)
+        .populate('driverId', 'name phone')
+        .populate('vehicleId', 'shortVehicleNumber registrationNumber modelName')
+        .populate('garageId', 'name garageId')
+        .sort({ completedAt: -1, requestedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Ride.countDocuments(filter),
+    ]);
+
+    const items = rides.map((r: any) => {
+      const driver = r.driverId as any;
+      const vehicle = r.vehicleId as any;
+      const garage = r.garageId as any;
+
+      const startedTime = r.startedAt ? new Date(r.startedAt).getTime() : new Date(r.requestedAt).getTime();
+      const completedTime = r.completedAt ? new Date(r.completedAt).getTime() : Date.now();
+      const durationSeconds = Math.max(0, Math.round((completedTime - startedTime) / 1000));
+
+      return {
+        id: r._id.toString(),
+        rideId: r.rideId,
+        status: r.status,
+        requestedAt: r.requestedAt,
+        startedAt: r.startedAt,
+        completedAt: r.completedAt,
+        passengerPseudonym: r.passengerPseudonym,
+        approximatePickupArea: r.approximatePickupArea,
+        vehicleId: vehicle?._id?.toString() || null,
+        shortVehicleNumber: vehicle?.shortVehicleNumber || 'N/A',
+        registrationNumber: vehicle?.registrationNumber || 'N/A',
+        driverId: driver?._id?.toString() || null,
+        driverName: driver?.name || 'Assigned Driver',
+        driverPhone: driver?.phone || '',
+        garageName: garage?.name || 'Garage',
+        garageCustomId: garage?.garageId || 'N/A',
+        distanceMeters: r.distanceMeters || 0,
+        durationSeconds,
+        fareAmount: r.fareAmount,
+        currency: r.currency || 'BDT',
+        paymentMethod: r.paymentMethod || 'CASH',
+        passengerRating: r.passengerRating,
+      };
+    });
+
+    return {
+      success: true,
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      trips: items,
+    };
+  }
+
+  /**
+   * Admin Trip History: Operational search and filter across all historical completed rides
+   */
+  public async getAdminTripHistory(options?: {
+    search?: string;
+    vehicleId?: string;
+    driverId?: string;
+    garageId?: string;
+    status?: string;
+    hasSafetyEvent?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Math.max(1, options?.page || 1);
+    const limit = Math.min(100, Math.max(1, options?.limit || 20));
+    const skip = (page - 1) * limit;
+
+    const filter: any = {};
+
+    if (options?.status && options.status !== 'ALL') {
+      filter.status = options.status;
+    } else {
+      filter.status = { $in: ['COMPLETED', 'CANCELLED', 'DECLINED', 'EXPIRED', 'ORPHANED'] };
+    }
+
+    if (options?.vehicleId && Types.ObjectId.isValid(options.vehicleId)) {
+      filter.vehicleId = new Types.ObjectId(options.vehicleId);
+    }
+    if (options?.driverId && Types.ObjectId.isValid(options.driverId)) {
+      filter.driverId = new Types.ObjectId(options.driverId);
+    }
+    if (options?.garageId && Types.ObjectId.isValid(options.garageId)) {
+      filter.garageId = new Types.ObjectId(options.garageId);
+    }
+
+    if (options?.startDate || options?.endDate) {
+      filter.requestedAt = {};
+      if (options.startDate) filter.requestedAt.$gte = new Date(options.startDate);
+      if (options.endDate) filter.requestedAt.$lte = new Date(options.endDate);
+    }
+
+    if (options?.hasSafetyEvent === 'true') {
+      const safetyEvents = await SafetyEvent.find({}).select('rideId').lean();
+      const safetyRideIds = safetyEvents.map((s) => s.rideId);
+      filter._id = { $in: safetyRideIds };
+    }
+
+    if (options?.search && options.search.trim() !== '') {
+      const q = options.search.trim();
+      const searchRegex = new RegExp(q, 'i');
+      filter.$or = [
+        { rideId: searchRegex },
+        { passengerPseudonym: searchRegex },
+        { approximatePickupArea: searchRegex },
+        { destinationText: searchRegex },
+      ];
+    }
+
+    const [rides, totalCount] = await Promise.all([
+      Ride.find(filter)
+        .populate('passengerId', 'name phone')
+        .populate('driverId', 'name phone')
+        .populate('vehicleId', 'shortVehicleNumber registrationNumber vehicleId')
+        .populate('garageId', 'name garageId')
+        .sort({ completedAt: -1, requestedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Ride.countDocuments(filter),
+    ]);
+
+    const rideIds = rides.map((r) => r._id);
+    const safetyEvents = await SafetyEvent.find({ rideId: { $in: rideIds } }).lean();
+    const safetyMap = new Map<string, any>();
+    safetyEvents.forEach((s: any) => safetyMap.set(s.rideId.toString(), s));
+
+    const items = rides.map((r: any) => {
+      const passenger = r.passengerId as any;
+      const driver = r.driverId as any;
+      const vehicle = r.vehicleId as any;
+      const garage = r.garageId as any;
+
+      const startedTime = r.startedAt ? new Date(r.startedAt).getTime() : new Date(r.requestedAt).getTime();
+      const completedTime = r.completedAt ? new Date(r.completedAt).getTime() : Date.now();
+      const durationSeconds = Math.max(0, Math.round((completedTime - startedTime) / 1000));
+      const safety = safetyMap.get(r._id.toString());
+
+      return {
+        id: r._id.toString(),
+        rideId: r.rideId,
+        status: r.status,
+        requestedAt: r.requestedAt,
+        startedAt: r.startedAt,
+        completedAt: r.completedAt,
+        passengerPseudonym: r.passengerPseudonym,
+        passengerName: passenger?.name || 'Passenger',
+        passengerPhone: passenger?.phone || '',
+        driverId: driver?._id?.toString() || null,
+        driverName: driver?.name || 'Driver',
+        driverPhone: driver?.phone || '',
+        vehicleId: vehicle?._id?.toString() || null,
+        shortVehicleNumber: vehicle?.shortVehicleNumber || 'N/A',
+        registrationNumber: vehicle?.registrationNumber || 'N/A',
+        vehicleSystemId: vehicle?.vehicleId || 'N/A',
+        garageId: garage?._id?.toString() || null,
+        garageName: garage?.name || 'N/A',
+        garageCustomId: garage?.garageId || 'N/A',
+        pickupArea: r.approximatePickupArea,
+        distanceMeters: r.distanceMeters || 0,
+        durationSeconds,
+        fareAmount: r.fareAmount,
+        currency: r.currency || 'BDT',
+        paymentMethod: r.paymentMethod || 'CASH',
+        passengerRating: r.passengerRating,
+        hasSafetyEvent: Boolean(safety),
+        safetyEventSummary: safety ? {
+          eventId: safety.eventId,
+          severity: safety.severity,
+          eventType: safety.eventType,
+          status: safety.status,
+        } : null,
+      };
+    });
+
+    return {
+      success: true,
+      page,
+      limit,
+      totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      trips: items,
+    };
+  }
+
+  /**
+   * Get complete Trip Detail by ID with strict IDOR ownership verification
+   */
+  public async getTripDetailById(userId: string, userRole: string, rideIdentifier: string) {
+    let ride: any = null;
+
+    if (Types.ObjectId.isValid(rideIdentifier)) {
+      ride = await Ride.findById(rideIdentifier)
+        .populate('passengerId', 'name phone')
+        .populate({
+          path: 'driverId',
+          select: 'name phone driverMode nidNumber',
+        })
+        .populate({
+          path: 'vehicleId',
+          select: 'vehicleId shortVehicleNumber registrationNumber modelName qrIdentifier ownershipType garageId',
+        })
+        .populate('garageId', 'name garageId phone address')
+        .lean();
+    }
+
+    if (!ride) {
+      ride = await Ride.findOne({ rideId: rideIdentifier })
+        .populate('passengerId', 'name phone')
+        .populate({
+          path: 'driverId',
+          select: 'name phone driverMode nidNumber',
+        })
+        .populate({
+          path: 'vehicleId',
+          select: 'vehicleId shortVehicleNumber registrationNumber modelName qrIdentifier ownershipType garageId',
+        })
+        .populate('garageId', 'name garageId phone address')
+        .lean();
+    }
+
+    if (!ride) {
+      return { success: false, statusCode: 404, error: 'Historical trip record not found.' };
+    }
+
+    const passengerObj = ride.passengerId as any;
+    const driverObj = ride.driverId as any;
+    const vehicleObj = ride.vehicleId as any;
+    const garageObj = ride.garageId as any;
+
+    const passengerIdStr = passengerObj?._id?.toString() || ride.passengerId?.toString();
+    const driverIdStr = driverObj?._id?.toString() || ride.driverId?.toString();
+    const garageIdStr = garageObj?._id?.toString() || ride.garageId?.toString();
+
+    // STRICT ROLE & IDOR AUTHORIZATION CHECKS
+    if (userRole === 'PASSENGER') {
+      if (passengerIdStr !== userId) {
+        return { success: false, statusCode: 403, error: 'Unauthorized: You do not have permission to view another passenger\'s trip history.' };
+      }
+    } else if (userRole === 'DRIVER') {
+      if (driverIdStr !== userId) {
+        return { success: false, statusCode: 403, error: 'Unauthorized: You do not have permission to view another driver\'s trip history.' };
+      }
+    } else if (userRole === 'GARAGE_OWNER') {
+      const ownedGarages = await Garage.find({ ownerId: new Types.ObjectId(userId) }).select('_id').lean();
+      const ownedGarageIdStrs = new Set(ownedGarages.map((g) => g._id.toString()));
+      const isGarageAuthorized = garageIdStr && ownedGarageIdStrs.has(garageIdStr);
+
+      if (!isGarageAuthorized) {
+        return { success: false, statusCode: 403, error: 'Unauthorized: This trip is not associated with your garage.' };
+      }
+    } else if (userRole !== 'ADMIN') {
+      return { success: false, statusCode: 403, error: 'Unauthorized role access.' };
+    }
+
+    // Fetch related records: Rating, Settlement, Safety Event
+    const [ratingDoc, settlementDoc, safetyDoc] = await Promise.all([
+      Rating.findOne({ rideId: ride._id }).lean(),
+      SettlementRecord.findOne({ rideId: ride._id }).lean(),
+      SafetyEvent.findOne({ rideId: ride._id }).lean(),
+    ]);
+
+    const startedTime = ride.startedAt ? new Date(ride.startedAt).getTime() : new Date(ride.requestedAt).getTime();
+    const completedTime = ride.completedAt ? new Date(ride.completedAt).getTime() : Date.now();
+    const durationSeconds = Math.max(0, Math.round((completedTime - startedTime) / 1000));
+
+    // Transform Route Points to standardized format
+    const formattedRoutePoints = (ride.routePoints || []).map((pt: any) => ({
+      coordinates: pt.coordinates as [number, number], // [lng, lat]
+      timestamp: pt.timestamp,
+      speed: pt.speed,
+      accuracy: pt.accuracy,
+      heading: pt.heading,
+    }));
+
+    // Apply Privacy Scoping rules for Driver View
+    const isDriverView = userRole === 'DRIVER';
+    const isPassengerView = userRole === 'PASSENGER';
+
+    const detailPayload = {
+      id: ride._id.toString(),
+      rideId: ride.rideId,
+      status: ride.status,
+      passengerPseudonym: ride.passengerPseudonym,
+
+      // Passenger Details (Exposed to Passenger and Admin ONLY)
+      passengerName: isDriverView ? 'Passenger' : passengerObj?.name || 'Passenger',
+      passengerPhone: isDriverView ? 'N/A (Privacy Protected)' : passengerObj?.phone || 'N/A',
+
+      // Driver Details
+      driverId: driverIdStr || null,
+      driverName: driverObj?.name || 'Authorized Driver',
+      driverPhone: isPassengerView || userRole === 'ADMIN' ? (driverObj?.phone || 'N/A') : 'N/A',
+      driverMode: driverObj?.driverMode || vehicleObj?.ownershipType || 'GARAGE_REGISTERED',
+
+      // Vehicle Details
+      vehicleId: vehicleObj?._id?.toString() || null,
+      vehicleSystemId: vehicleObj?.vehicleId || 'N/A',
+      shortVehicleNumber: vehicleObj?.shortVehicleNumber || 'N/A',
+      registrationNumber: vehicleObj?.registrationNumber || 'N/A',
+      modelName: vehicleObj?.modelName || 'Electric Rickshaw',
+      ownershipType: vehicleObj?.ownershipType || 'GARAGE_REGISTERED',
+      qrIdentifier: vehicleObj?.qrIdentifier || 'N/A',
+
+      // Garage Details
+      garageId: garageIdStr || null,
+      garageCustomId: garageObj?.garageId || 'N/A',
+      garageName: garageObj?.name || (vehicleObj?.ownershipType === 'SELF_OWNED' ? 'Self-Owned' : 'N/A'),
+      garagePhone: garageObj?.phone || null,
+
+      // Locations & Coordinates
+      pickupLocation: ride.pickupLocation,
+      pickupLatitude: ride.pickupLatitude,
+      pickupLongitude: ride.pickupLongitude,
+      approximatePickupArea: ride.approximatePickupArea,
+
+      endCoordinates: ride.endCoordinates,
+      endLatitude: ride.endLatitude,
+      endLongitude: ride.endLongitude,
+      destinationText: ride.destinationText || 'Standard Drop-off',
+
+      // Route Telemetry
+      routePoints: formattedRoutePoints,
+      routePointCount: formattedRoutePoints.length,
+      distanceMeters: ride.distanceMeters || 0,
+      durationSeconds,
+
+      // Timestamps & Lifecycle
+      requestedAt: ride.requestedAt,
+      acceptedAt: ride.acceptedAt,
+      startedAt: ride.startedAt,
+      completionRequestedAt: ride.completionRequestedAt,
+      completedAt: ride.completedAt,
+      cancelledAt: ride.cancelledAt,
+      cancellationReason: ride.cancellationReason,
+
+      // Settlement & Fare
+      fareAmount: ride.fareAmount ?? settlementDoc?.fareAmount,
+      currency: ride.currency || 'BDT',
+      paymentMethod: ride.paymentMethod || 'CASH',
+      settlement: settlementDoc ? {
+        fareAmount: settlementDoc.fareAmount,
+        driverEarnings: settlementDoc.driverEarnings,
+        platformCommission: settlementDoc.platformCommission,
+        status: settlementDoc.status,
+        settledAt: settlementDoc.settledAt,
+      } : null,
+
+      // Rating
+      passengerRating: ride.passengerRating ?? ratingDoc?.rating,
+      ratingComment: isDriverView ? undefined : ratingDoc?.comment, // Hidden from driver
+      ratingTags: isDriverView ? undefined : ratingDoc?.tags,
+
+      // Safety Information
+      safetyEvent: safetyDoc ? {
+        eventId: safetyDoc.eventId,
+        severity: safetyDoc.severity,
+        eventType: safetyDoc.eventType,
+        status: safetyDoc.status,
+        isEmergency: safetyDoc.isEmergency,
+        description: safetyDoc.description,
+        timestamp: safetyDoc.timestamp,
+        acknowledgedAt: safetyDoc.acknowledgedAt,
+        resolvedAt: safetyDoc.resolvedAt,
+      } : null,
+    };
+
+    return {
+      success: true,
+      statusCode: 200,
+      trip: detailPayload,
     };
   }
 }

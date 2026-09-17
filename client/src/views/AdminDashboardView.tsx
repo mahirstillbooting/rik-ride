@@ -81,6 +81,8 @@ export const AdminDashboardView: React.FC = () => {
   const [fleetStatusFilter, setFleetStatusFilter] = useState<string>('ALL');
   const [fleetSearchText, setFleetSearchText] = useState<string>('');
   const [selectedFleetVehicle, setSelectedFleetVehicle] = useState<AdminFleetDriverLocation | null>(null);
+  const [adminFleetMode, setAdminFleetMode] = useState<'ALL' | 'GARAGE' | 'SELF_OWNED'>('ALL');
+  const [selectedGarageFilterId, setSelectedGarageFilterId] = useState<string>('ALL');
 
   // Filtering states
   const [pendingTypeFilter, setPendingTypeFilter] = useState<'ALL' | 'GARAGE' | 'USER' | 'VEHICLE'>('ALL');
@@ -1094,48 +1096,137 @@ export const AdminDashboardView: React.FC = () => {
             {/* TAB 6: RICKSHAWS / VEHICLES */}
             {currentNavItem.id === 'admin-vehicles' && (
               <View style={styles.viewSection}>
+                {/* Fleet Hierarchy Mode Selector */}
+                <View style={styles.filterRow}>
+                  {(['ALL', 'GARAGE', 'SELF_OWNED'] as const).map((mode) => (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor: adminFleetMode === mode ? colors.primary : colors.surfaceElevated,
+                          borderColor: adminFleetMode === mode ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => {
+                        setAdminFleetMode(mode);
+                        setSelectedGarageFilterId('ALL');
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          { color: adminFleetMode === mode ? colors.primaryForeground : colors.textPrimary },
+                        ]}
+                      >
+                        {mode === 'ALL'
+                          ? 'All Platform Rickshaws'
+                          : mode === 'GARAGE'
+                          ? 'Garages Hierarchy (Garage Rickshaws)'
+                          : 'Self-Owned Drivers Fleet'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Specific Garage Selector (When Garage Mode is Active) */}
+                {adminFleetMode === 'GARAGE' && garagesList.length > 0 && (
+                  <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textSecondary }}>Filter Garage Hub:</Text>
+                    <TouchableOpacity
+                      style={[
+                        styles.filterChip,
+                        {
+                          backgroundColor: selectedGarageFilterId === 'ALL' ? colors.primarySurface : colors.surface,
+                          borderColor: selectedGarageFilterId === 'ALL' ? colors.primaryBorder : colors.border,
+                        },
+                      ]}
+                      onPress={() => setSelectedGarageFilterId('ALL')}
+                    >
+                      <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '700' }}>All Registered Garages</Text>
+                    </TouchableOpacity>
+
+                    {garagesList.map((g) => (
+                      <TouchableOpacity
+                        key={g._id}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: selectedGarageFilterId === g._id ? colors.primarySurface : colors.surface,
+                            borderColor: selectedGarageFilterId === g._id ? colors.primaryBorder : colors.border,
+                          },
+                        ]}
+                        onPress={() => setSelectedGarageFilterId(g._id)}
+                      >
+                        <Text style={{ fontSize: 12, color: colors.textPrimary, fontWeight: '600' }}>
+                          {g.name} ({g.customId || 'Garage'})
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
                 {vehiclesList.length === 0 ? (
                   <EmptyState
                     title="No Registered Vehicles"
                     description="No rickshaws or fleet vehicles registered in the database."
                   />
                 ) : (
-                  vehiclesList.map((v) => (
-                    <Card key={v._id} variant="default" style={styles.itemCard}>
-                      <CardBody style={styles.itemCardBody}>
-                        <View style={styles.itemHeader}>
-                          <View style={styles.itemTitleCol}>
-                            <View style={styles.badgeTitleRow}>
-                              <Badge label={`SHORT ID: ${v.shortVehicleNumber || 'N/A'}`} variant="info" />
-                              <Badge label={v.ownershipType} variant="neutral" />
-                              {renderStatusBadge(v.verificationStatus)}
+                  vehiclesList
+                    .filter((v) => {
+                      if (adminFleetMode === 'GARAGE') {
+                        if (v.ownershipType !== 'GARAGE_OWNED') return false;
+                        if (selectedGarageFilterId !== 'ALL' && v.garageId?._id !== selectedGarageFilterId && v.garageId !== selectedGarageFilterId) return false;
+                        return true;
+                      }
+                      if (adminFleetMode === 'SELF_OWNED') {
+                        return v.ownershipType === 'SELF_OWNED';
+                      }
+                      return true;
+                    })
+                    .map((v) => (
+                      <Card key={v._id} variant="default" style={styles.itemCard}>
+                        <CardBody style={styles.itemCardBody}>
+                          <View style={styles.itemHeader}>
+                            <View style={styles.itemTitleCol}>
+                              <View style={styles.badgeTitleRow}>
+                                <Badge label={`SHORT ID: ${v.shortVehicleNumber || 'N/A'}`} variant="info" />
+                                <Badge
+                                  label={v.ownershipType === 'GARAGE_OWNED' ? `GARAGE: ${v.garageId?.name || 'Garage'}` : 'SELF-OWNED DRIVER'}
+                                  variant={v.ownershipType === 'GARAGE_OWNED' ? 'neutral' : 'info'}
+                                />
+                                {renderStatusBadge(v.verificationStatus)}
+                              </View>
+                              <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>
+                                Vehicle {v.shortVehicleNumber || v.registrationNumber}
+                              </Text>
+                              <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+                                Full Reg #: {v.registrationNumber} | Assigned Driver: {v.assignedDriverId?.name || 'Unassigned'} | Mode: {v.ownershipType}
+                              </Text>
                             </View>
-                            <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>
-                              Vehicle {v.shortVehicleNumber || v.registrationNumber}
-                            </Text>
-                            <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-                              Full Reg #: {v.registrationNumber} | Assigned Driver: {v.assignedDriverId?.name || 'None'} | Garage: {v.garageId?.name || 'Independent'}
-                            </Text>
                           </View>
-                        </View>
 
-                        <View style={styles.actionRow}>
-                          <Button
-                            title="Approve Vehicle"
-                            variant="primary"
-                            size="sm"
-                            onPress={() => handleApprovalAction('VEHICLE', v._id, 'APPROVE')}
-                          />
-                          <Button
-                            title="Suspend"
-                            variant="danger"
-                            size="sm"
-                            onPress={() => handleApprovalAction('VEHICLE', v._id, 'SUSPEND')}
-                          />
-                        </View>
-                      </CardBody>
-                    </Card>
-                  ))
+                          <View style={styles.actionRow}>
+                            {v.verificationStatus !== 'APPROVED' && (
+                              <Button
+                                title="Approve Vehicle"
+                                variant="primary"
+                                size="sm"
+                                onPress={() => handleApprovalAction('VEHICLE', v._id, 'APPROVE')}
+                              />
+                            )}
+                            {v.verificationStatus !== 'SUSPENDED' && (
+                              <Button
+                                title="Suspend Vehicle"
+                                variant="danger"
+                                size="sm"
+                                onPress={() => handleApprovalAction('VEHICLE', v._id, 'SUSPEND')}
+                              />
+                            )}
+                          </View>
+                        </CardBody>
+                      </Card>
+                    ))
                 )}
               </View>
             )}

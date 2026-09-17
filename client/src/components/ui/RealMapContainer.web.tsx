@@ -705,17 +705,33 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
       <View style={[styles.mapHeaderOverlay, { backgroundColor: colors.overlay, borderColor: colors.borderSubtle }]}>
         <View style={styles.headerInfo}>
           <View style={styles.titleRow}>
-            <View style={[styles.pulseDot, { backgroundColor: isPassengerView ? colors.success : colors.primary }]} />
+            <View
+              style={[
+                styles.pulseDot,
+                {
+                  backgroundColor:
+                    status === 'EMERGENCY_SOS_ACTIVE'
+                      ? colors.danger
+                      : isPassengerView
+                      ? colors.success
+                      : colors.primary,
+                },
+              ]}
+            />
             <Text style={[styles.mapTitle, { color: colors.textPrimary }]}>{title}</Text>
           </View>
           <Text style={[styles.mapSubtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
         </View>
 
         <View style={styles.badgeGroup}>
-          <Badge
-            label={`${rickshawMarkers.length} AVAILABLE RICKSHAWS`}
-            variant={rickshawMarkers.length > 0 ? 'success' : 'neutral'}
-          />
+          {status === 'EMERGENCY_SOS_ACTIVE' ? (
+            <Badge label="EMERGENCY SOS ACTIVE" variant="danger" />
+          ) : (
+            <Badge
+              label={`${rickshawMarkers.length} AVAILABLE RICKSHAWS`}
+              variant={rickshawMarkers.length > 0 ? 'success' : 'neutral'}
+            />
+          )}
 
           {allowExpand && (
             <TouchableOpacity

@@ -30,6 +30,8 @@ import {
   AdminStats,
   PendingQueueItem,
   AuditLogItem,
+  AdminFleetSummary,
+  AdminFleetDriverLocation,
 } from '../services/adminService';
 import { clientRideService, RideData } from '../services/rideService';
 import { clientSafetyService, SafetyEventData } from '../services/safetyService';
@@ -52,7 +54,21 @@ export const AdminDashboardView: React.FC = () => {
   const [vehiclesList, setVehiclesList] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [fleetLocations, setFleetLocations] = useState<{ drivers: any[]; passengers: any[] }>({ drivers: [], passengers: [] });
+  const [fleetSummary, setFleetSummary] = useState<AdminFleetSummary>({
+    totalFleet: 0,
+    available: 0,
+    activeRide: 0,
+    idle: 0,
+    stale: 0,
+    emergency: 0,
+    unverified: 0,
+  });
   const [activeRidesList, setActiveRidesList] = useState<RideData[]>([]);
+
+  // Command Center Filtering & Selection States
+  const [fleetStatusFilter, setFleetStatusFilter] = useState<string>('ALL');
+  const [fleetSearchText, setFleetSearchText] = useState<string>('');
+  const [selectedFleetVehicle, setSelectedFleetVehicle] = useState<AdminFleetDriverLocation | null>(null);
 
   // Filtering states
   const [pendingTypeFilter, setPendingTypeFilter] = useState<'ALL' | 'GARAGE' | 'USER' | 'VEHICLE'>('ALL');
@@ -161,6 +177,27 @@ export const AdminDashboardView: React.FC = () => {
     };
   }, [fetchSafetyEvents, stopSiren]);
 
+  const fetchFleetLocations = useCallback(async () => {
+    if (currentNavItem.id !== 'admin-overview') return;
+    try {
+      const locationsRes = await adminService.getFleetAndPassengerLocations({
+        statusFilter: fleetStatusFilter !== 'ALL' ? fleetStatusFilter : undefined,
+        search: fleetSearchText.trim() || undefined,
+      });
+      setFleetLocations({ drivers: locationsRes.drivers, passengers: locationsRes.passengers });
+      setFleetSummary(locationsRes.summary);
+    } catch (e) {
+      console.warn('Fleet locations fetch notice:', e);
+    }
+  }, [currentNavItem.id, fleetStatusFilter, fleetSearchText]);
+
+  useEffect(() => {
+    fetchFleetLocations();
+    if (currentNavItem.id !== 'admin-overview') return;
+    const interval = setInterval(fetchFleetLocations, 5000);
+    return () => clearInterval(interval);
+  }, [fetchFleetLocations, currentNavItem.id]);
+
   const loadDataForActiveTab = async () => {
     setLoading(true);
     setErrorMsg(null);
@@ -170,13 +207,23 @@ export const AdminDashboardView: React.FC = () => {
           adminService.getStats(),
           adminService.getPendingQueue(),
           adminService.getAuditLogs(1, 10),
-          adminService.getFleetAndPassengerLocations().catch(() => ({ drivers: [], passengers: [] })),
+          adminService.getFleetAndPassengerLocations({
+            statusFilter: fleetStatusFilter !== 'ALL' ? fleetStatusFilter : undefined,
+            search: fleetSearchText.trim() || undefined,
+          }).catch(() => ({
+            success: false,
+            drivers: [],
+            passengers: [],
+            totalActive: 0,
+            summary: { totalFleet: 0, available: 0, activeRide: 0, idle: 0, stale: 0, emergency: 0, unverified: 0 },
+          })),
           clientRideService.getAdminActiveRides().catch(() => ({ rides: [] })),
         ]);
         setStats(statsRes);
         setPendingQueue(pendingRes);
         setAuditLogs(logsRes);
-        setFleetLocations(locationsRes);
+        setFleetLocations({ drivers: locationsRes.drivers, passengers: locationsRes.passengers });
+        setFleetSummary(locationsRes.summary);
         setActiveRidesList(ridesRes.rides || []);
       } else if (currentNavItem.id === 'admin-approvals') {
         const queueRes = await adminService.getPendingQueue();
@@ -449,14 +496,214 @@ export const AdminDashboardView: React.FC = () => {
                   </Card>
                 </View>
 
-                {/* GeoTelemetry Map Preview Container */}
-                <MapContainer
-                  height={340}
-                  title="Dhaka GeoTelemetry Command Center"
-                  subtitle="Live Device GPS, Active Fleet & Passenger Telemetry Stream"
-                  driverMarkers={fleetLocations.drivers}
-                  passengerMarkers={fleetLocations.passengers}
-                />
+                {/* ADMIN LIVE FLEET & OPERATIONS COMMAND CENTER SECTION */}
+                <Card variant="default" style={styles.fullWidthCard}>
+                  <CardHeader
+                    title="Live Fleet & Operations Command Center"
+                    subtitle="Real-time authoritative fleet positions, driver-vehicle verification & active ride telemetry"
+                    icon={<Icon name="map-pin" size={18} color={colors.primary} />}
+                    action={
+                      <Badge
+                        label={`${fleetLocations.drivers.length} VEHICLES ACTIVE`}
+                        variant={fleetLocations.drivers.length > 0 ? 'success' : 'neutral'}
+                      />
+                    }
+                  />
+                  <CardBody style={{ gap: spacing.md }}>
+                    {/* Fleet Operational Summary Bar */}
+                    <View style={styles.fleetSummaryBar}>
+                      <View style={[styles.summaryPill, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                        <Text style={[styles.summaryPillVal, { color: colors.textPrimary }]}>{fleetSummary.totalFleet}</Text>
+                        <Text style={[styles.summaryPillLabel, { color: colors.textMuted }]}>Total Active Fleet</Text>
+                      </View>
+                      <View style={[styles.summaryPill, { backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.3)' }]}>
+                        <Text style={[styles.summaryPillVal, { color: '#10B981' }]}>{fleetSummary.available}</Text>
+                        <Text style={[styles.summaryPillLabel, { color: '#10B981' }]}>Available</Text>
+                      </View>
+                      <View style={[styles.summaryPill, { backgroundColor: 'rgba(217, 119, 6, 0.1)', borderColor: 'rgba(217, 119, 6, 0.3)' }]}>
+                        <Text style={[styles.summaryPillVal, { color: '#D97706' }]}>{fleetSummary.activeRide}</Text>
+                        <Text style={[styles.summaryPillLabel, { color: '#D97706' }]}>On Active Ride</Text>
+                      </View>
+                      <View style={[styles.summaryPill, { backgroundColor: 'rgba(245, 158, 11, 0.1)', borderColor: 'rgba(245, 158, 11, 0.3)' }]}>
+                        <Text style={[styles.summaryPillVal, { color: '#F59E0B' }]}>{fleetSummary.idle}</Text>
+                        <Text style={[styles.summaryPillLabel, { color: '#F59E0B' }]}>Idle</Text>
+                      </View>
+                      <View style={[styles.summaryPill, { backgroundColor: 'rgba(107, 114, 128, 0.1)', borderColor: 'rgba(107, 114, 128, 0.3)' }]}>
+                        <Text style={[styles.summaryPillVal, { color: '#6B7280' }]}>{fleetSummary.stale}</Text>
+                        <Text style={[styles.summaryPillLabel, { color: '#6B7280' }]}>Stale GPS (&gt;2m)</Text>
+                      </View>
+                      <View style={[styles.summaryPill, { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)' }]}>
+                        <Text style={[styles.summaryPillVal, { color: '#EF4444' }]}>{fleetSummary.emergency}</Text>
+                        <Text style={[styles.summaryPillLabel, { color: '#EF4444' }]}>Emergency</Text>
+                      </View>
+                    </View>
+
+                    {/* Unverified Driver-Vehicle Warning Banner */}
+                    {fleetSummary.unverified > 0 && (
+                      <View style={[styles.unverifiedAlertBanner, { backgroundColor: 'rgba(245, 158, 11, 0.12)', borderColor: '#F59E0B' }]}>
+                        <Icon name="alert-triangle" size={18} color="#F59E0B" />
+                        <Text style={[styles.unverifiedAlertText, { color: '#F59E0B' }]}>
+                          <strong>{fleetSummary.unverified} Driver-Vehicle Unverified Linkages Detected:</strong> Unconfirmed driver operating registered vehicle. Click markers for inspection details.
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Operational State Filters & Live Search */}
+                    <View style={styles.fleetControlsRow}>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                        {(['ALL', 'AVAILABLE', 'ACTIVE_RIDE', 'IDLE', 'STALE', 'EMERGENCY'] as const).map((st) => (
+                          <TouchableOpacity
+                            key={st}
+                            style={[
+                              styles.filterChip,
+                              {
+                                backgroundColor: fleetStatusFilter === st ? colors.primary : colors.surfaceElevated,
+                                borderColor: fleetStatusFilter === st ? colors.primary : colors.border,
+                              },
+                            ]}
+                            onPress={() => setFleetStatusFilter(st)}
+                          >
+                            <Text
+                              style={[
+                                styles.filterChipText,
+                                { color: fleetStatusFilter === st ? colors.primaryForeground : colors.textPrimary },
+                              ]}
+                            >
+                              {st === 'ALL' ? 'All Operational' : st}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+
+                      <View style={styles.fleetSearchInputWrapper}>
+                        <Input
+                          placeholder="Search vehicle ID, short #, driver name, phone, garage, or ride ID..."
+                          value={fleetSearchText}
+                          onChangeText={setFleetSearchText}
+                          leftIcon={<Icon name="search" size={16} color={colors.textMuted} />}
+                          rightIcon={fleetSearchText ? <TouchableOpacity onPress={() => setFleetSearchText('')}><Icon name="x" size={14} color={colors.textMuted} /></TouchableOpacity> : undefined}
+                          containerStyle={{ marginBottom: 0 }}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Real Interactive Leaflet Command Center Map Container */}
+                    <RealMapContainer
+                      height={480}
+                      title="ADMIN LIVE FLEET & OPERATIONS COMMAND CENTER"
+                      subtitle="Authoritative Real-Time GPS Telemetry & Strict Driver-Vehicle Verification"
+                      driverMarkers={fleetLocations.drivers}
+                      passengerMarkers={fleetLocations.passengers}
+                      onSelectDriverMarker={(driverMarker) => setSelectedFleetVehicle(driverMarker)}
+                      routePolyline={selectedFleetVehicle?.activeRideSummary?.routePoints?.map((pt: any) => [pt.coordinates[1], pt.coordinates[0]])}
+                    />
+
+                    {/* Selected Vehicle & Active Ride Detail Drawer */}
+                    {selectedFleetVehicle && (
+                      <View style={[styles.vehicleDetailPanel, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                        <View style={styles.vehicleDetailHeader}>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <Text style={[styles.vehicleDetailTitle, { color: colors.primary }]}>
+                                Rickshaw {selectedFleetVehicle.shortVehicleNumber}
+                              </Text>
+                              <Badge label={selectedFleetVehicle.operationalState} variant={selectedFleetVehicle.operationalState === 'AVAILABLE' ? 'success' : selectedFleetVehicle.operationalState === 'EMERGENCY' ? 'danger' : 'warning'} />
+                              <Badge label={selectedFleetVehicle.freshness} variant={selectedFleetVehicle.isFresh ? 'success' : 'neutral'} />
+                            </View>
+
+                            <Text style={[styles.vehicleDetailSubtitle, { color: colors.textSecondary }]}>
+                              Reg: {selectedFleetVehicle.registrationNumber} • System ID: {selectedFleetVehicle.vehicleSystemId} • Mode: {selectedFleetVehicle.ownershipType}
+                            </Text>
+                          </View>
+
+                          <TouchableOpacity onPress={() => setSelectedFleetVehicle(null)} style={{ padding: 4 }}>
+                            <Icon name="x" size={20} color={colors.textMuted} />
+                          </TouchableOpacity>
+                        </View>
+
+                        {/* Driver Verification Status Banner */}
+                        <View
+                          style={[
+                            styles.verificationBox,
+                            {
+                              backgroundColor: selectedFleetVehicle.isDriverVerifiedForVehicle ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.15)',
+                              borderColor: selectedFleetVehicle.isDriverVerifiedForVehicle ? '#10B981' : '#F59E0B',
+                            },
+                          ]}
+                        >
+                          <Icon
+                            name={selectedFleetVehicle.isDriverVerifiedForVehicle ? 'check-circle' : 'alert-triangle'}
+                            size={18}
+                            color={selectedFleetVehicle.isDriverVerifiedForVehicle ? '#10B981' : '#F59E0B'}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: selectedFleetVehicle.isDriverVerifiedForVehicle ? '#10B981' : '#F59E0B' }}>
+                              {selectedFleetVehicle.isDriverVerifiedForVehicle ? '✓ VERIFIED DRIVER ASSIGNMENT' : '⚠️ UNVERIFIED DRIVER LINKAGE'}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: colors.textSecondary, marginTop: 2 }}>
+                              {selectedFleetVehicle.driverVerificationReason}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Driver & Vehicle Metadata Grid */}
+                        <View style={styles.detailGrid}>
+                          <View style={styles.detailGridItem}>
+                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Driver Name & Phone</Text>
+                            <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                              {selectedFleetVehicle.driverName} ({selectedFleetVehicle.driverPhone})
+                            </Text>
+                          </View>
+
+                          <View style={styles.detailGridItem}>
+                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Garage Name / Custom ID</Text>
+                            <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                              {selectedFleetVehicle.garageName} ({selectedFleetVehicle.garageCustomId})
+                            </Text>
+                          </View>
+
+                          <View style={styles.detailGridItem}>
+                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Last Seen Telemetry</Text>
+                            <Text style={[styles.detailVal, { color: selectedFleetVehicle.isFresh ? colors.success : colors.textMuted }]}>
+                              {selectedFleetVehicle.lastSeenAgoSeconds}s ago ({new Date(selectedFleetVehicle.timestamp).toLocaleTimeString()})
+                            </Text>
+                          </View>
+
+                          <View style={styles.detailGridItem}>
+                            <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Current GPS Coordinates</Text>
+                            <Text style={[styles.detailVal, { color: colors.primary, fontFamily: Platform.OS === 'web' ? 'monospace' : 'System' }]}>
+                              {selectedFleetVehicle.lat.toFixed(5)}°, {selectedFleetVehicle.lng.toFixed(5)}° (±{selectedFleetVehicle.accuracy}m)
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Active Ride Summary Box (If vehicle is engaged in an active ride) */}
+                        {selectedFleetVehicle.activeRideSummary && (
+                          <View style={[styles.activeRideBox, { backgroundColor: colors.surface, borderColor: colors.primaryBorder }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Icon name="navigation" size={16} color={colors.primary} />
+                                <Text style={{ fontSize: 13, fontWeight: '800', color: colors.primary }}>
+                                  Active Ride: {selectedFleetVehicle.activeRideSummary.rideId}
+                                </Text>
+                              </View>
+                              <Badge label={selectedFleetVehicle.activeRideSummary.status} variant="success" />
+                            </View>
+
+                            <View style={{ gap: 4, marginTop: 6 }}>
+                              <Text style={{ fontSize: 12, color: colors.textPrimary }}>
+                                Passenger: <strong>{selectedFleetVehicle.activeRideSummary.passengerName}</strong> ({selectedFleetVehicle.activeRideSummary.passengerPseudonym} • {selectedFleetVehicle.activeRideSummary.passengerPhone})
+                              </Text>
+                              <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                                Pickup Area: <strong>{selectedFleetVehicle.activeRideSummary.pickupArea}</strong> • Route Points: <strong>{selectedFleetVehicle.activeRideSummary.routePoints?.length || 0} telemetry nodes</strong> • Distance: <strong>{((selectedFleetVehicle.activeRideSummary.distanceMeters || 0) / 1000).toFixed(2)} km</strong>
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </CardBody>
+                </Card>
 
                 {/* Active Operational Rides Stream Card */}
                 <Card variant="default" style={styles.fullWidthCard}>
@@ -1309,5 +1556,109 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: spacing.sm,
     marginTop: spacing.xs,
+  },
+
+  // COMMAND CENTER STYLES
+  fleetSummaryBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+  },
+  summaryPill: {
+    flex: 1,
+    minWidth: 110,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryPillVal: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  summaryPillLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 1,
+    textTransform: 'uppercase',
+  },
+  unverifiedAlertBanner: {
+    padding: spacing.sm + 2,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+  },
+  unverifiedAlertText: {
+    flex: 1,
+    fontSize: 12,
+  },
+  fleetControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+  },
+  fleetSearchInputWrapper: {
+    flex: 1,
+    minWidth: 260,
+  },
+  vehicleDetailPanel: {
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  vehicleDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+  },
+  vehicleDetailTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  vehicleDetailSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  verificationBox: {
+    padding: spacing.sm,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+  },
+  activeRideBox: {
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    gap: spacing.xs,
+    marginTop: 4,
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: 4,
+  },
+  detailGridItem: {
+    flex: 1,
+    minWidth: 160,
+    gap: 2,
+  },
+  detailLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  detailVal: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

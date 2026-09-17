@@ -54,6 +54,108 @@ export interface AuditLogItem {
   timestamp: string;
 }
 
+export type FleetOperationalState = 'AVAILABLE' | 'ACTIVE_RIDE' | 'IDLE' | 'STALE' | 'EMERGENCY';
+
+export interface AdminActiveRideSummary {
+  rideId: string;
+  status: string;
+  passengerId?: string;
+  passengerName: string;
+  passengerPhone: string;
+  passengerPseudonym: string;
+  pickupArea: string;
+  pickupCoordinates: [number, number];
+  routePoints?: Array<{
+    coordinates: [number, number];
+    timestamp: string;
+    speed?: number;
+    accuracy?: number;
+  }>;
+  distanceMeters?: number;
+  startedAt?: string;
+  isAdminReviewPending?: boolean;
+}
+
+export interface AdminFleetDriverLocation {
+  id: string;
+  type: 'DRIVER';
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  speed?: number;
+  heading?: number;
+  status: string;
+  timestamp: string;
+  locationSource: string;
+  isFresh: boolean;
+  freshness: 'FRESH' | 'STALE';
+  lastSeenAgoSeconds: number;
+
+  // Verification & Identity
+  isDriverVerifiedForVehicle: boolean;
+  driverVerificationReason: string;
+
+  // Driver Details
+  driverId: string | null;
+  driverName: string;
+  driverPhone: string;
+  driverMode: 'GARAGE_REGISTERED' | 'SELF_OWNED';
+
+  // Vehicle Details
+  vehicleId: string | null;
+  vehicleSystemId: string;
+  vehicleCustomId: string;
+  shortVehicleNumber: string;
+  registrationNumber: string;
+  ownershipType: 'GARAGE_REGISTERED' | 'SELF_OWNED';
+  vehicleStatus: string;
+  vehicleVerificationStatus: string;
+  modelName: string;
+
+  // Garage Details
+  garageId: string | null;
+  garageCustomId: string;
+  garageName: string;
+
+  // Command Center Operational State
+  operationalState: FleetOperationalState;
+  activeRideSummary?: AdminActiveRideSummary | null;
+
+  label: string;
+  sublabel: string;
+}
+
+export interface AdminFleetPassengerLocation {
+  id: string;
+  type: 'PASSENGER';
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  speed?: number;
+  status: string;
+  timestamp: string;
+  label: string;
+  sublabel: string;
+}
+
+export interface AdminFleetSummary {
+  totalFleet: number;
+  available: number;
+  activeRide: number;
+  idle: number;
+  stale: number;
+  emergency: number;
+  unverified: number;
+}
+
+export interface AdminFleetLocationsResponse {
+  success: boolean;
+  summary: AdminFleetSummary;
+  drivers: AdminFleetDriverLocation[];
+  passengers: AdminFleetPassengerLocation[];
+  totalActive: number;
+}
+
 async function authFetch(endpoint: string, options: RequestInit = {}) {
   const token = await AuthStorage.getToken();
   const headers = {
@@ -133,14 +235,31 @@ export const adminService = {
     return data.logs || [];
   },
 
-  async getFleetAndPassengerLocations(): Promise<{
-    drivers: Array<{ id: string; type: string; lat: number; lng: number; accuracy?: number; label: string; sublabel: string }>;
-    passengers: Array<{ id: string; type: string; lat: number; lng: number; accuracy?: number; label: string; sublabel: string }>;
-  }> {
-    const data = await authFetch('/api/admin/locations');
+  async getFleetAndPassengerLocations(params: {
+    statusFilter?: string;
+    search?: string;
+    freshness?: string;
+  } = {}): Promise<AdminFleetLocationsResponse> {
+    const query = new URLSearchParams();
+    if (params.statusFilter) query.append('statusFilter', params.statusFilter);
+    if (params.search) query.append('search', params.search);
+    if (params.freshness) query.append('freshness', params.freshness);
+
+    const data = await authFetch(`/api/admin/locations?${query.toString()}`);
     return {
+      success: data.success ?? true,
+      summary: data.summary || {
+        totalFleet: data.drivers?.length || 0,
+        available: 0,
+        activeRide: 0,
+        idle: 0,
+        stale: 0,
+        emergency: 0,
+        unverified: 0,
+      },
       drivers: data.drivers || [],
       passengers: data.passengers || [],
+      totalActive: data.totalActive || 0,
     };
   },
 };

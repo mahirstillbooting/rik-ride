@@ -29,11 +29,12 @@ export interface RealMapContainerProps {
   height?: number | string;
   onRecenter?: () => void;
   allowExpand?: boolean;
-  driverMarkers?: MapMarkerItem[];
-  passengerMarkers?: MapMarkerItem[];
+  driverMarkers?: any[];
+  passengerMarkers?: any[];
   rickshawMarkers?: NearbyRickshaw[];
   isPassengerView?: boolean;
   onTargetedRequest?: (rickshaw: NearbyRickshaw) => void;
+  onSelectDriverMarker?: (driverMarker: any) => void;
   routePolyline?: Array<[number, number]>;
 }
 
@@ -51,6 +52,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   rickshawMarkers = [],
   isPassengerView = false,
   onTargetedRequest,
+  onSelectDriverMarker,
   routePolyline,
 }) => {
   const { colors, mode } = useTheme();
@@ -79,6 +81,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   const accuracyCircleRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const rickshawLayerGroupRef = useRef<any>(null);
+  const driverLayerGroupRef = useRef<any>(null);
+  const passengerLayerGroupRef = useRef<any>(null);
   const polylineRef = useRef<any>(null);
 
   const [isUserPanning, setIsUserPanning] = useState(false);
@@ -96,7 +100,14 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   const modalAccuracyCircleRef = useRef<any>(null);
   const modalTileLayerRef = useRef<any>(null);
   const modalRickshawLayerGroupRef = useRef<any>(null);
+  const modalDriverLayerGroupRef = useRef<any>(null);
+  const modalPassengerLayerGroupRef = useRef<any>(null);
   const modalPolylineRef = useRef<any>(null);
+
+  const onSelectDriverMarkerRef = useRef(onSelectDriverMarker);
+  useEffect(() => {
+    onSelectDriverMarkerRef.current = onSelectDriverMarker;
+  }, [onSelectDriverMarker]);
 
   // Acquire Browser Geolocation if no props provided
   useEffect(() => {
@@ -354,6 +365,168 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   };
 
   // -------------------------------------------------------------
+  // RENDER ADMIN DRIVER FLEET MARKERS ON LEAFLET MAP INSTANCE
+  // -------------------------------------------------------------
+  const updateDriverMarkersOnMap = (map: any, layerGroupRef: React.MutableRefObject<any>) => {
+    if (!map || Platform.OS !== 'web') return;
+    let L: any;
+    try {
+      L = require('leaflet');
+    } catch {
+      return;
+    }
+
+    if (!layerGroupRef.current) {
+      layerGroupRef.current = L.layerGroup().addTo(map);
+    } else {
+      layerGroupRef.current.clearLayers();
+    }
+
+    driverMarkers.forEach((d: any) => {
+      const state = d.operationalState || 'AVAILABLE';
+      let strokeColor = '#D97706';
+      let bgPulse = 'rgba(217, 119, 6, 0.25)';
+      let hasPulse = false;
+
+      if (state === 'EMERGENCY') {
+        strokeColor = '#EF4444';
+        bgPulse = 'rgba(239, 68, 68, 0.45)';
+        hasPulse = true;
+      } else if (state === 'ACTIVE_RIDE') {
+        strokeColor = '#D97706';
+        bgPulse = 'rgba(217, 119, 6, 0.35)';
+        hasPulse = true;
+      } else if (state === 'AVAILABLE') {
+        strokeColor = '#10B981';
+        bgPulse = 'rgba(16, 185, 129, 0.25)';
+      } else if (state === 'STALE') {
+        strokeColor = '#6B7280';
+        bgPulse = 'rgba(107, 114, 128, 0.15)';
+      } else {
+        strokeColor = '#F59E0B';
+        bgPulse = 'rgba(245, 158, 11, 0.2)';
+      }
+
+      const driverIcon = L.divIcon({
+        className: 'rik-admin-driver-marker',
+        html: `
+          <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+            ${hasPulse ? `<div style="position: absolute; width: 36px; height: 36px; border-radius: 50%; background: ${bgPulse}; animation: rikPulse 2s infinite ease-in-out;"></div>` : ''}
+            <div style="width: 30px; height: 30px; border-radius: 10px; background: #18181B; border: 2.5px solid ${strokeColor}; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.7); position: relative;">
+              ${d.isDriverVerifiedForVehicle === false ? `<div style="position: absolute; top: -5px; right: -5px; width: 12px; height: 12px; border-radius: 50%; background: #F59E0B; border: 2px solid #18181B; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 900; color: #18181B;">!</div>` : ''}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="${strokeColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="1" y="3" width="15" height="13" rx="2"></rect>
+                <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                <circle cx="18.5" cy="18.5" r="2.5"></circle>
+              </svg>
+            </div>
+          </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+      });
+
+      const lat = d.lat ?? d.latitude;
+      const lng = d.lng ?? d.longitude;
+      if (lat === undefined || lng === undefined) return;
+
+      const marker = L.marker([lat, lng], { icon: driverIcon });
+
+      const popoverContent = `
+        <div style="padding: 10px 12px; font-family: system-ui, -apple-system, sans-serif; background: #18181B; color: #FAFAFA; border: 1.5px solid ${strokeColor}; border-radius: 10px; min-width: 240px; box-shadow: 0 10px 25px rgba(0,0,0,0.85);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
+            <span style="font-size: 13px; font-weight: 800; color: ${strokeColor};">Rickshaw ${d.shortVehicleNumber || d.label || 'Unit'}</span>
+            <span style="font-size: 10px; font-weight: 800; color: ${strokeColor}; background: rgba(255,255,255,0.08); border: 1px solid ${strokeColor}; padding: 2px 6px; border-radius: 4px;">${state}</span>
+          </div>
+          <div style="font-size: 12px; color: #E4E4E7; margin-bottom: 4px;">
+            Driver: <strong>${d.driverName || d.sublabel || 'Authorized Driver'}</strong> ${d.driverPhone ? `(${d.driverPhone})` : ''}
+          </div>
+          <div style="font-size: 11px; color: #A1A1AA; margin-bottom: 4px;">
+            Vehicle ID: <strong style="color: #D4D4D8;">${d.vehicleSystemId || d.vehicleCustomId || 'N/A'}</strong> | Garage: <strong style="color: #D4D4D8;">${d.garageName || 'N/A'}</strong>
+          </div>
+          ${d.isDriverVerifiedForVehicle === false ? `
+            <div style="font-size: 11px; font-weight: 700; color: #F59E0B; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); padding: 4px 8px; border-radius: 6px; margin-bottom: 6px;">
+              ⚠️ Driver unverified for this vehicle
+            </div>
+          ` : `
+            <div style="font-size: 11px; color: #10B981; margin-bottom: 4px;">
+              ✓ Verified Driver Assignment
+            </div>
+          `}
+          ${d.activeRideSummary ? `
+            <div style="font-size: 11px; color: #A1A1AA; border-top: 1px dashed #27272A; padding-top: 6px; margin-top: 6px;">
+              Active Ride: <strong style="color: #FAFAFA;">${d.activeRideSummary.rideId}</strong><br/>
+              Passenger: <strong>${d.activeRideSummary.passengerName}</strong> (${d.activeRideSummary.passengerPseudonym})
+            </div>
+          ` : ''}
+        </div>
+      `;
+
+      marker.bindTooltip(popoverContent, {
+        direction: 'top',
+        offset: [0, -18],
+        opacity: 1,
+        interactive: true,
+        className: 'rik-custom-leaflet-tooltip',
+      });
+
+      marker.on('click', () => {
+        if (onSelectDriverMarkerRef.current) {
+          onSelectDriverMarkerRef.current(d);
+        }
+      });
+
+      marker.addTo(layerGroupRef.current);
+    });
+  };
+
+  // -------------------------------------------------------------
+  // RENDER ADMIN PASSENGER MARKERS ON LEAFLET MAP INSTANCE
+  // -------------------------------------------------------------
+  const updatePassengerMarkersOnMap = (map: any, layerGroupRef: React.MutableRefObject<any>) => {
+    if (!map || Platform.OS !== 'web') return;
+    let L: any;
+    try {
+      L = require('leaflet');
+    } catch {
+      return;
+    }
+
+    if (!layerGroupRef.current) {
+      layerGroupRef.current = L.layerGroup().addTo(map);
+    } else {
+      layerGroupRef.current.clearLayers();
+    }
+
+    passengerMarkers.forEach((p: any) => {
+      const passIcon = L.divIcon({
+        className: 'rik-admin-passenger-marker',
+        html: `
+          <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+            <div style="width: 14px; height: 14px; border-radius: 50%; background: #3B82F6; border: 2px solid #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.6);"></div>
+          </div>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+      });
+
+      const lat = p.lat ?? p.latitude;
+      const lng = p.lng ?? p.longitude;
+      if (lat === undefined || lng === undefined) return;
+
+      const marker = L.marker([lat, lng], { icon: passIcon });
+      marker.bindTooltip(`
+        <div style="padding: 6px 10px; font-family: system-ui; background: #18181B; color: #FAFAFA; border: 1px solid #3B82F6; border-radius: 6px; font-size: 11px;">
+          <strong>${p.label || 'Passenger Unit'}</strong><br/>${p.sublabel || ''}
+        </div>
+      `, { direction: 'top', offset: [0, -14], className: 'rik-custom-leaflet-tooltip' });
+
+      marker.addTo(layerGroupRef.current);
+    });
+  };
+
+  // -------------------------------------------------------------
   // EMBEDDED MAP INITIALIZATION & UPDATES
   // -------------------------------------------------------------
   useEffect(() => {
@@ -421,6 +594,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         setMapLoaded(true);
 
         updateRickshawMarkersOnMap(map, rickshawLayerGroupRef);
+        updateDriverMarkersOnMap(map, driverLayerGroupRef);
+        updatePassengerMarkersOnMap(map, passengerLayerGroupRef);
       } catch (err: any) {
         setMapError(err.message || 'Error initializing interactive map');
       }
@@ -434,6 +609,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         tileLayerRef.current = null;
         accuracyCircleRef.current = null;
         rickshawLayerGroupRef.current = null;
+        driverLayerGroupRef.current = null;
+        passengerLayerGroupRef.current = null;
         if (polylineRef.current) {
           polylineRef.current.remove();
           polylineRef.current = null;
@@ -470,12 +647,33 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     }
   }, [routePolyline]);
 
-  // Update embedded rickshaw markers when prop changes
+  // Update embedded & modal markers when props change
   useEffect(() => {
     if (mapInstanceRef.current) {
       updateRickshawMarkersOnMap(mapInstanceRef.current, rickshawLayerGroupRef);
     }
+    if (modalMapInstanceRef.current) {
+      updateRickshawMarkersOnMap(modalMapInstanceRef.current, modalRickshawLayerGroupRef);
+    }
   }, [rickshawMarkers]);
+
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      updateDriverMarkersOnMap(mapInstanceRef.current, driverLayerGroupRef);
+    }
+    if (modalMapInstanceRef.current) {
+      updateDriverMarkersOnMap(modalMapInstanceRef.current, modalDriverLayerGroupRef);
+    }
+  }, [driverMarkers]);
+
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      updatePassengerMarkersOnMap(mapInstanceRef.current, passengerLayerGroupRef);
+    }
+    if (modalMapInstanceRef.current) {
+      updatePassengerMarkersOnMap(modalMapInstanceRef.current, modalPassengerLayerGroupRef);
+    }
+  }, [passengerMarkers]);
 
   // Update dark mode class on theme toggle
   useEffect(() => {
@@ -603,6 +801,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         modalTileLayerRef.current = tileLayer;
 
         updateRickshawMarkersOnMap(map, modalRickshawLayerGroupRef);
+        updateDriverMarkersOnMap(map, modalDriverLayerGroupRef);
+        updatePassengerMarkersOnMap(map, modalPassengerLayerGroupRef);
 
         setTimeout(() => {
           if (modalMapInstanceRef.current) {
@@ -622,6 +822,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         modalTileLayerRef.current = null;
         modalAccuracyCircleRef.current = null;
         modalRickshawLayerGroupRef.current = null;
+        modalDriverLayerGroupRef.current = null;
+        modalPassengerLayerGroupRef.current = null;
         if (modalPolylineRef.current) {
           modalPolylineRef.current.remove();
           modalPolylineRef.current = null;

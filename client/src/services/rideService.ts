@@ -6,7 +6,10 @@ export interface RideData {
   rideId: string;
   passengerPseudonym: string;
   approximatePickupArea?: string;
-  status: 'INITIATED' | 'ACCEPTED' | 'ACTIVE' | 'WAITING_PASSENGER_CONFIRM' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED';
+  pickupLatitude?: number;
+  pickupLongitude?: number;
+  pickupAccuracy?: number;
+  status: 'INITIATED' | 'ACCEPTED' | 'ACTIVE' | 'WAITING_PASSENGER_CONFIRM' | 'COMPLETED' | 'DECLINED' | 'CANCELLED' | 'EXPIRED' | 'ORPHANED';
   startCoordinates?: {
     type: 'Point';
     coordinates: [number, number]; // [lng, lat]
@@ -35,6 +38,24 @@ export interface RideData {
     shortVehicleNumber: string;
     registrationNumber: string;
   };
+  driverLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    speed?: number;
+    heading?: number;
+    status?: string;
+    updatedAt?: string;
+  } | null;
+  passengerLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    speed?: number;
+    heading?: number;
+    status?: string;
+    updatedAt?: string;
+  } | null;
   lastValidatedSpeed?: number;
   acceptanceDeadline?: string;
   remainingSeconds?: number;
@@ -88,6 +109,25 @@ class ClientRideService {
     }
   }
 
+  public async cancelPassengerRide(rideId: string, reason?: string): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const res = await fetch(`${env.apiUrl}/api/ride/passenger/cancel`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ rideId, reason }),
+      });
+      const data = await res.json();
+      return data;
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Network error cancelling ride request' };
+    }
+  }
+
   public async confirmPassengerCompletion(rideId: string): Promise<{
     success: boolean;
     message?: string;
@@ -123,6 +163,25 @@ class ClientRideService {
       return data;
     } catch (e: any) {
       return { success: false, error: e.message || 'Network error fetching pending rides' };
+    }
+  }
+
+  public async declineDriverRide(rideId: string): Promise<{
+    success: boolean;
+    message?: string;
+    error?: string;
+  }> {
+    try {
+      const headers = await this.getAuthHeaders();
+      const res = await fetch(`${env.apiUrl}/api/ride/driver/decline`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ rideId }),
+      });
+      const data = await res.json();
+      return data;
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Network error declining ride request' };
     }
   }
 

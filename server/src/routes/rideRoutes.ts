@@ -95,6 +95,31 @@ router.post('/passenger/confirm-completion', requireRole('PASSENGER'), async (re
   }
 });
 
+/**
+ * POST /api/ride/passenger/cancel
+ * Passenger cancels an initiated or accepted ride request
+ */
+router.post('/passenger/cancel', requireRole('PASSENGER'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { rideId, reason } = req.body;
+    if (!rideId) {
+      res.status(400).json({ success: false, error: 'Ride ID is required' });
+      return;
+    }
+
+    const result = await rideService.cancelPassengerRide(req.user!.id, rideId, reason);
+
+    if (!result.success) {
+      res.status(result.statusCode || 400).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to cancel ride request', details: error.message });
+  }
+});
+
 // -------------------------------------------------------------
 // DRIVER RIDE ENDPOINTS
 // -------------------------------------------------------------
@@ -109,6 +134,31 @@ router.get('/driver/pending', requireRole('DRIVER'), async (req: AuthenticatedRe
     res.json(result);
   } catch (error: any) {
     res.status(500).json({ success: false, error: 'Failed to fetch pending ride requests', details: error.message });
+  }
+});
+
+/**
+ * POST /api/ride/driver/decline
+ * Driver declines a targeted pending ride request
+ */
+router.post('/driver/decline', requireRole('DRIVER'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { rideId } = req.body;
+    if (!rideId) {
+      res.status(400).json({ success: false, error: 'Ride ID is required' });
+      return;
+    }
+
+    const result = await rideService.declineDriverRide(req.user!.id, rideId);
+
+    if (!result.success) {
+      res.status(result.statusCode || 400).json({ success: false, error: result.error });
+      return;
+    }
+
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Failed to decline ride request', details: error.message });
   }
 });
 

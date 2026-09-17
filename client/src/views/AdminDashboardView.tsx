@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,10 +14,13 @@ import { useToast } from '../components/ui/Toast';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
+import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
+import { Modal } from '../components/ui/Modal';
 import { Icon } from '../components/ui/Icon';
 import { GradientView } from '../components/ui/GradientView';
 import { MapContainer } from '../components/ui/MapContainer';
+import { RealMapContainer } from '../components/ui/RealMapContainer';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
@@ -29,6 +32,7 @@ import {
   AuditLogItem,
 } from '../services/adminService';
 import { clientRideService, RideData } from '../services/rideService';
+import { clientSafetyService, SafetyEventData } from '../services/safetyService';
 
 export const AdminDashboardView: React.FC = () => {
   const { colors, mode } = useTheme();
@@ -57,6 +61,19 @@ export const AdminDashboardView: React.FC = () => {
   const [userSearchText, setUserSearchText] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
+  // Safety & Emergency Command Center State
+  const [safetyEvents, setSafetyEvents] = useState<SafetyEventData[]>([]);
+  const [safetyStats, setSafetyStats] = useState({ redCount: 0, yellowCount: 0, totalActive: 0 });
+  const [isSirenMuted, setIsSirenMuted] = useState(false);
+  const [selectedResolveEvent, setSelectedResolveEvent] = useState<SafetyEventData | null>(null);
+  const [resolveNotes, setResolveNotes] = useState('');
+  const [resolvingLoading, setResolvingLoading] = useState(false);
+  const [focusedCoords, setFocusedCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Siren Web Audio Synthesizer Refs
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const oscRef = useRef<OscillatorNode | null>(null);
+
   // Access Security Check
   if (user && user.role !== 'ADMIN') {
     return (
@@ -66,6 +83,83 @@ export const AdminDashboardView: React.FC = () => {
       />
     );
   }
+
+  // Audio Siren Player
+  const startSiren = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    if (isSirenMuted) {
+      stopSiren();
+      return;
+    }
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new AudioCtx();
+      }
+      if (audioCtxRef.current.state === 'suspended') {
+        audioCtxRef.current.resume();
+      }
+
+      if (!oscRef.current) {
+        const ctx = audioCtxRef.current;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        oscRef.current = osc;
+      }
+    } catch (e) {
+      console.warn('Siren audio init:', e);
+    }
+  }, [isSirenMuted]);
+
+  const stopSiren = useCallback(() => {
+    if (oscRef.current) {
+      try {
+        oscRef.current.stop();
+        oscRef.current.disconnect();
+      } catch {}
+      oscRef.current = null;
+    }
+  }, []);
+
+  // Poll Safety Events
+  const fetchSafetyEvents = useCallback(async () => {
+    const res = await clientSafetyService.getActiveSafetyEvents();
+    if (res.success && res.events) {
+      setSafetyEvents(res.events);
+      const redCount = res.redCount || 0;
+      const yellowCount = res.yellowCount || 0;
+      setSafetyStats({ redCount, yellowCount, totalActive: res.totalActiveEvents || 0 });
+
+      // Siren triggers if unacknowledged RED SOS event exists
+      const hasUnackRed = res.events.some((e) => e.severity === 'RED' && e.status === 'ACTIVE');
+      if (hasUnackRed && !isSirenMuted) {
+        startSiren();
+      } else {
+        stopSiren();
+      }
+    }
+  }, [isSirenMuted, startSiren, stopSiren]);
+
+  useEffect(() => {
+    fetchSafetyEvents();
+    const interval = setInterval(() => {
+      fetchSafetyEvents();
+    }, 3000);
+
+    return () => {
+      clearInterval(interval);
+      stopSiren();
+    };
+  }, [fetchSafetyEvents, stopSiren]);
 
   const loadDataForActiveTab = async () => {
     setLoading(true);
@@ -136,6 +230,42 @@ export const AdminDashboardView: React.FC = () => {
     }
   };
 
+  // Safety Action Handlers
+  const handleAcknowledgeSafety = async (eventId: string) => {
+    const res = await clientSafetyService.acknowledgeSafetyEvent(eventId);
+    if (res.success) {
+      showToast('Safety alert acknowledged by Admin.', 'success');
+      fetchSafetyEvents();
+    } else {
+      showToast(res.error || 'Failed to acknowledge alert', 'danger');
+    }
+  };
+
+  const handleConfirmResolveSafety = async () => {
+    if (!selectedResolveEvent) return;
+    setResolvingLoading(true);
+    const res = await clientSafetyService.resolveSafetyEvent(selectedResolveEvent.eventId, resolveNotes);
+    setResolvingLoading(false);
+
+    if (res.success) {
+      showToast('Safety event successfully resolved.', 'success');
+      setSelectedResolveEvent(null);
+      setResolveNotes('');
+      fetchSafetyEvents();
+    } else {
+      showToast(res.error || 'Failed to resolve safety event', 'danger');
+    }
+  };
+
+  const handleFocusOnEvent = (event: SafetyEventData) => {
+    if (event.passengerLatitude && event.passengerLongitude) {
+      setFocusedCoords({ lat: event.passengerLatitude, lng: event.passengerLongitude });
+      showToast(`Map focused on Safety Event ${event.eventId}`, 'info');
+    } else {
+      showToast('No coordinates available for this safety event', 'warning');
+    }
+  };
+
   const renderStatusBadge = (status: string) => {
     switch (status) {
       case 'ACTIVE':
@@ -151,6 +281,29 @@ export const AdminDashboardView: React.FC = () => {
         return <Badge label={status} variant="neutral" />;
     }
   };
+
+  // Build map markers for active safety events
+  const safetyPassengerMarkers = safetyEvents
+    .filter((e) => e.passengerLatitude && e.passengerLongitude)
+    .map((e) => ({
+      id: `p-${e.eventId}`,
+      type: 'PASSENGER' as const,
+      lat: e.passengerLatitude!,
+      lng: e.passengerLongitude!,
+      label: `PASSENGER [${e.eventId}]`,
+      sublabel: `${e.severity} ${e.eventType} • ${e.passengerId?.name || 'Passenger'}`,
+    }));
+
+  const safetyDriverMarkers = safetyEvents
+    .filter((e) => e.driverLatitude && e.driverLongitude)
+    .map((e) => ({
+      id: `d-${e.eventId}`,
+      type: 'DRIVER' as const,
+      lat: e.driverLatitude!,
+      lng: e.driverLongitude!,
+      label: `VEHICLE [${e.eventId}]`,
+      sublabel: `Rickshaw ${e.vehicleId?.shortVehicleNumber || ''} • Driver: ${e.driverId?.name || 'Driver'}`,
+    }));
 
   return (
     <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
@@ -186,6 +339,42 @@ export const AdminDashboardView: React.FC = () => {
             {/* TAB 1: OVERVIEW */}
             {currentNavItem.id === 'admin-overview' && (
               <View style={styles.viewSection}>
+                {/* Active Emergency Safety Alert Banner */}
+                {safetyStats.totalActive > 0 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.pendingBanner,
+                      {
+                        backgroundColor: safetyStats.redCount > 0 ? '#FEE2E2' : '#FEF3C7',
+                        borderColor: safetyStats.redCount > 0 ? '#DC2626' : '#D97706',
+                      },
+                    ]}
+                    onPress={() => setActiveRouteId('admin-safety')}
+                  >
+                    <Icon
+                      name="alert-triangle"
+                      size={20}
+                      color={safetyStats.redCount > 0 ? '#DC2626' : '#D97706'}
+                    />
+                    <View style={styles.bannerTextCol}>
+                      <Text
+                        style={[
+                          styles.bannerTitle,
+                          { color: safetyStats.redCount > 0 ? '#DC2626' : '#D97706' },
+                        ]}
+                      >
+                        {safetyStats.totalActive} Active Safety Events ({safetyStats.redCount} RED SOS, {safetyStats.yellowCount} Yellow Alerts)
+                      </Text>
+                      <Text style={[styles.bannerSubtitle, { color: colors.textSecondary }]}>
+                        Immediate operational dispatch review required on Safety Command Center.
+                      </Text>
+                    </View>
+                    <Text style={[styles.bannerAction, { color: safetyStats.redCount > 0 ? '#DC2626' : '#D97706' }]}>
+                      Open Safety Command →
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 {/* Pending Approval Alert Banner */}
                 {stats && stats.pendingApprovals > 0 && (
                   <TouchableOpacity
@@ -659,45 +848,144 @@ export const AdminDashboardView: React.FC = () => {
               </View>
             )}
 
-            {/* TAB 7: SAFETY / SOS COMMAND CENTER */}
+            {/* TAB 7: SAFETY & EMERGENCY SOS COMMAND CENTER */}
             {currentNavItem.id === 'admin-safety' && (
               <View style={styles.viewSection}>
-                <MapContainer
-                  height={360}
+                {/* Real-Time Emergency Dispatch Map Container */}
+                <RealMapContainer
+                  latitude={focusedCoords?.lat ?? 23.8103}
+                  longitude={focusedCoords?.lng ?? 90.4125}
+                  height={380}
                   title="Real-Time Emergency & Safety Dispatch Map"
-                  subtitle="Device GPS Tracking & Rapid Response Escalation"
+                  subtitle="Live Passenger Emergency Locations & Driver Unit Markers"
+                  status={safetyStats.redCount > 0 ? 'EMERGENCY_SOS_ACTIVE' : 'SAFETY_MONITORING_ACTIVE'}
+                  driverMarkers={safetyDriverMarkers}
+                  passengerMarkers={safetyPassengerMarkers}
+                  allowExpand={true}
                 />
 
+                {/* Safety Command Center Status Card */}
                 <Card variant="hero" style={styles.fullWidthCard}>
                   <CardHeader
                     title="Safety & Real-Time SOS Command Monitor"
-                    subtitle="Live platform trip monitoring & safety alert center"
-                    icon={<Icon name="alert-triangle" size={18} color={colors.primary} />}
+                    subtitle="Live platform trip safety overview & emergency escalation center"
+                    icon={<Icon name="shield" size={18} color={colors.primary} />}
+                    action={
+                      <Button
+                        title={isSirenMuted ? 'Unmute Siren Audio' : 'Mute Siren Audio'}
+                        variant={isSirenMuted ? 'outline' : 'danger'}
+                        size="sm"
+                        icon={<Icon name={isSirenMuted ? 'volume-x' : 'volume-2'} size={14} color={isSirenMuted ? colors.textPrimary : '#FFFFFF'} />}
+                        onPress={() => {
+                          const nextMute = !isSirenMuted;
+                          setIsSirenMuted(nextMute);
+                          if (nextMute) stopSiren();
+                        }}
+                      />
+                    }
                   />
                   <CardBody style={styles.placeholderBody}>
                     <View style={styles.placeholderGrid}>
-                      <View style={[styles.placeholderCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.warning }]}>
+                      <View style={[styles.placeholderCard, { backgroundColor: colors.surfaceElevated, borderColor: '#D97706' }]}>
                         <View style={styles.alertHeaderRow}>
-                          <Icon name="alert-triangle" size={14} color={colors.warning} />
-                          <Text style={[styles.placeholderTitle, { color: colors.warning }]}>Yellow Safety Alerts</Text>
+                          <Icon name="alert-triangle" size={16} color="#D97706" />
+                          <Text style={[styles.placeholderTitle, { color: '#D97706' }]}>Yellow Safety Alerts</Text>
                         </View>
-                        <Text style={[styles.placeholderValue, { color: colors.textPrimary }]}>0 Active</Text>
+                        <Text style={[styles.placeholderValue, { color: colors.textPrimary }]}>{safetyStats.yellowCount} Active</Text>
                         <Text style={[styles.placeholderDesc, { color: colors.textMuted }]}>
-                          Trip delay anomalies, prolonged stop warnings, and route deviation events.
+                          Passenger safety warnings & operational trip anomaly alerts.
                         </Text>
                       </View>
 
-                      <View style={[styles.placeholderCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.danger }]}>
+                      <View style={[styles.placeholderCard, { backgroundColor: colors.surfaceElevated, borderColor: '#DC2626' }]}>
                         <View style={styles.alertHeaderRow}>
-                          <Icon name="shield" size={14} color={colors.danger} />
-                          <Text style={[styles.placeholderTitle, { color: colors.danger }]}>Red SOS Panic Events</Text>
+                          <Icon name="shield" size={16} color="#DC2626" />
+                          <Text style={[styles.placeholderTitle, { color: '#DC2626' }]}>Red SOS Panic Events</Text>
                         </View>
-                        <Text style={[styles.placeholderValue, { color: colors.textPrimary }]}>0 Active</Text>
+                        <Text style={[styles.placeholderValue, { color: colors.textPrimary }]}>{safetyStats.redCount} Active</Text>
                         <Text style={[styles.placeholderDesc, { color: colors.textMuted }]}>
-                          Emergency passenger/driver SOS triggers and high-priority safety escalations.
+                          Urgent passenger SOS emergency triggers requiring rapid admin review.
                         </Text>
                       </View>
                     </View>
+                  </CardBody>
+                </Card>
+
+                {/* Live Safety Events Stream Table / List */}
+                <Card variant="default" style={styles.fullWidthCard}>
+                  <CardHeader
+                    title={`Active Safety Events Stream (${safetyEvents.length})`}
+                    subtitle="Real-time emergency & safety event list"
+                    icon={<Icon name="alert-triangle" size={18} color={colors.primary} />}
+                  />
+                  <CardBody>
+                    {safetyEvents.length === 0 ? (
+                      <EmptyState
+                        title="No Active Safety Events"
+                        description="Platform is operating cleanly. Active Yellow safety alerts and Red SOS triggers will appear here in real-time."
+                      />
+                    ) : (
+                      safetyEvents.map((event) => (
+                        <View key={event._id} style={[styles.logRow, { borderBottomColor: colors.borderSubtle }]}>
+                          <View style={styles.logMeta}>
+                            <Badge
+                              label={event.severity}
+                              variant={event.severity === 'RED' ? 'danger' : 'warning'}
+                            />
+                            <Badge
+                              label={event.status}
+                              variant={event.status === 'ACKNOWLEDGED' ? 'info' : 'warning'}
+                            />
+                            <Text style={[styles.logTime, { color: colors.textMuted }]}>
+                              ID: {event.eventId} • {new Date(event.timestamp).toLocaleTimeString()}
+                            </Text>
+                          </View>
+
+                          <Text style={[styles.logDetails, { color: colors.textPrimary }]}>
+                            Passenger: {event.passengerId?.name || 'N/A'} ({event.passengerId?.phone || 'N/A'}) • Driver: {event.driverId?.name || 'Unassigned'} • Vehicle: {event.vehicleId?.shortVehicleNumber || 'N/A'}
+                          </Text>
+
+                          {event.description && (
+                            <Text style={[styles.logDesc, { color: colors.textSecondary }]}>
+                              {event.description} {event.nearbyUsersCount ? `(Nearby 500m units queried: ${event.nearbyUsersCount})` : ''}
+                            </Text>
+                          )}
+
+                          <View style={styles.eventActionRow}>
+                            {event.passengerLatitude && event.passengerLongitude && (
+                              <Button
+                                title="Focus Map"
+                                variant="outline"
+                                size="sm"
+                                icon={<Icon name="navigation" size={14} color={colors.primary} />}
+                                onPress={() => handleFocusOnEvent(event)}
+                              />
+                            )}
+
+                            {event.status === 'ACTIVE' && (
+                              <Button
+                                title="Acknowledge"
+                                variant="primary"
+                                size="sm"
+                                icon={<Icon name="check" size={14} color="#FFFFFF" />}
+                                onPress={() => handleAcknowledgeSafety(event.eventId)}
+                              />
+                            )}
+
+                            <Button
+                              title="Resolve Event"
+                              variant="success"
+                              size="sm"
+                              icon={<Icon name="check-circle" size={14} color="#FFFFFF" />}
+                              onPress={() => {
+                                setSelectedResolveEvent(event);
+                                setResolveNotes('');
+                              }}
+                            />
+                          </View>
+                        </View>
+                      ))
+                    )}
                   </CardBody>
                 </Card>
               </View>
@@ -755,6 +1043,45 @@ export const AdminDashboardView: React.FC = () => {
           </>
         )}
       </View>
+
+      {/* RESOLUTION MODAL */}
+      <Modal
+        visible={selectedResolveEvent !== null}
+        onClose={() => setSelectedResolveEvent(null)}
+        title={`Resolve Safety Event — ${selectedResolveEvent?.eventId || ''}`}
+      >
+        <View style={styles.modalContentCol}>
+          <Text style={[styles.modalBodyText, { color: colors.textSecondary }]}>
+            Marking event <Text style={{ fontWeight: '700', color: colors.primary }}>{selectedResolveEvent?.eventId}</Text> ({selectedResolveEvent?.severity}) as RESOLVED. Please enter administrative resolution details for the audit record.
+          </Text>
+
+          <Input
+            label="Resolution Notes"
+            placeholder="e.g. Passenger verified safe, driver contacted, emergency services dispatched..."
+            value={resolveNotes}
+            onChangeText={setResolveNotes}
+            multiline
+            numberOfLines={3}
+          />
+
+          <View style={styles.modalActionRow}>
+            <Button
+              title="Cancel"
+              variant="outline"
+              size="md"
+              onPress={() => setSelectedResolveEvent(null)}
+            />
+            <Button
+              title="Confirm Resolution"
+              variant="primary"
+              size="md"
+              loading={resolvingLoading}
+              icon={<Icon name="check-circle" size={16} color="#FFFFFF" />}
+              onPress={handleConfirmResolveSafety}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -802,14 +1129,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   bannerTextCol: {
     flex: 1,
   },
   bannerTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   bannerSubtitle: {
     fontSize: 12,
@@ -826,27 +1153,26 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    minWidth: 220,
+    minWidth: 200,
   },
   statCardBody: {
     gap: spacing.xs,
   },
   statCardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   statValue: {
-    fontSize: 32,
-    fontWeight: '900',
-    letterSpacing: -0.8,
+    fontSize: 28,
+    fontWeight: '800',
   },
   statLabel: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
   statDetail: {
-    fontSize: 12,
+    fontSize: 11,
   },
   fullWidthCard: {
     width: '100%',
@@ -854,42 +1180,44 @@ const styles = StyleSheet.create({
   logRow: {
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    gap: 4,
+    gap: spacing.xs,
   },
   logMeta: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.xs,
   },
   logTime: {
     fontSize: 11,
   },
   logDetails: {
     fontSize: 13,
+    fontWeight: '600',
+  },
+  logDesc: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  eventActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
   },
   filterRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.xs,
+    flexWrap: 'wrap',
   },
   filterChip: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.full,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
   },
   filterChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  filterControlsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
-  },
-  filterSelect: {
-    flex: 1,
-    minWidth: 160,
+    fontSize: 13,
+    fontWeight: '600',
   },
   itemCard: {
     width: '100%',
@@ -900,47 +1228,54 @@ const styles = StyleSheet.create({
   itemHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     flexWrap: 'wrap',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
   itemTitleCol: {
     flex: 1,
-    minWidth: 240,
     gap: 4,
   },
   badgeTitleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.xs,
-    flexWrap: 'wrap',
+    alignItems: 'center',
   },
   itemTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   itemSubtitle: {
     fontSize: 13,
-    lineHeight: 18,
   },
   itemDate: {
     fontSize: 11,
   },
   actionRow: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    gap: spacing.sm,
     flexWrap: 'wrap',
+  },
+  filterControlsRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    flexWrap: 'wrap',
+  },
+  filterSelect: {
+    flex: 1,
+    minWidth: 200,
   },
   placeholderBody: {
     padding: spacing.md,
   },
   placeholderGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.md,
+    flexWrap: 'wrap',
   },
   placeholderCard: {
     flex: 1,
-    minWidth: 260,
+    minWidth: 220,
     padding: spacing.md,
     borderRadius: borderRadius.md,
     borderWidth: 1,
@@ -952,15 +1287,27 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   placeholderTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
   },
   placeholderValue: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '900',
   },
   placeholderDesc: {
     fontSize: 12,
+  },
+  modalContentCol: {
+    gap: spacing.md,
+  },
+  modalBodyText: {
+    fontSize: 13,
     lineHeight: 18,
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
 });

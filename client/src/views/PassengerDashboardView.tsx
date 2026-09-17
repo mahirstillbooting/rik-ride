@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Linking } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
+import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { LoadingState } from '../components/ui/LoadingState';
 import { ErrorState } from '../components/ui/ErrorState';
@@ -15,6 +16,7 @@ import { spacing, borderRadius } from '../theme/spacing';
 import { passengerLocationApiService, NearbyRickshaw } from '../services/passengerLocationService';
 import { SharingStatus } from '../services/locationService';
 import { clientRideService, RideData } from '../services/rideService';
+import { clientSafetyService } from '../services/safetyService';
 
 export const PassengerDashboardView: React.FC = () => {
   const { colors } = useTheme();
@@ -53,6 +55,14 @@ export const PassengerDashboardView: React.FC = () => {
   const [activeRide, setActiveRide] = useState<RideData | null>(null);
   const [confirmingCompletion, setConfirmingCompletion] = useState(false);
 
+  // Safety & Emergency Command States
+  const [yellowLoading, setYellowLoading] = useState(false);
+  const [redLoading, setRedLoading] = useState(false);
+  const [overrideLoading, setOverrideLoading] = useState(false);
+  const [showRedConfirmModal, setShowRedConfirmModal] = useState(false);
+  const [showEmergencyCallModal, setShowEmergencyCallModal] = useState(false);
+  const [isHighFrequencyTracking, setIsHighFrequencyTracking] = useState(false);
+
   // Tracking refs
   const watchIdRef = useRef<number | null>(null);
   const lastSentTsRef = useRef<number>(0);
@@ -77,6 +87,9 @@ export const PassengerDashboardView: React.FC = () => {
     const res = await clientRideService.getPassengerActiveRide();
     if (res.success) {
       setActiveRide(res.ride);
+      if (!res.ride) {
+        setIsHighFrequencyTracking(false);
+      }
     }
   }, []);
 
@@ -118,7 +131,7 @@ export const PassengerDashboardView: React.FC = () => {
     };
   }, []);
 
-  // Location update handler with throttling
+  // Location update handler with high-frequency support during emergency
   const sendLocationUpdate = useCallback(
     async (
       lat: number,
@@ -130,7 +143,8 @@ export const PassengerDashboardView: React.FC = () => {
       force: boolean = false
     ) => {
       const now = Date.now();
-      if (!force && now - lastSentTsRef.current < 4500) {
+      const minInterval = isHighFrequencyTracking ? 1800 : 4500;
+      if (!force && now - lastSentTsRef.current < minInterval) {
         return;
       }
       lastSentTsRef.current = now;
@@ -167,7 +181,7 @@ export const PassengerDashboardView: React.FC = () => {
         }
       }
     },
-    []
+    [isHighFrequencyTracking]
   );
 
   // Start Live Location Sharing
@@ -283,9 +297,90 @@ export const PassengerDashboardView: React.FC = () => {
     if (res.success) {
       showToast('Drop-off confirmed! Trip completed successfully.', 'success');
       setActiveRide(null);
+      setIsHighFrequencyTracking(false);
       pollActiveRide();
     } else {
       showToast(res.error || 'Failed to confirm drop-off', 'danger');
+    }
+  };
+
+  // --- SAFETY SYSTEM HANDLERS ---
+
+  // Yellow Safety Alert Handler
+  const handleYellowAlert = async () => {
+    if (!activeRide) return;
+    setYellowLoading(true);
+    const res = await clientSafetyService.triggerYellowAlert({
+      rideId: activeRide.id,
+      latitude: currentLoc?.latitude,
+      longitude: currentLoc?.longitude,
+      accuracy: currentLoc?.accuracy,
+    });
+    setYellowLoading(false);
+
+    if (res.success) {
+      showToast('Yellow Safety Alert activated! Operations notified.', 'warning');
+    } else {
+      showToast(res.error || 'Failed to trigger Yellow Safety Alert', 'danger');
+    }
+  };
+
+  // Red Emergency SOS Handler
+  const handleRedSOSConfirm = async () => {
+    setShowRedConfirmModal(false);
+    if (!activeRide) return;
+    setRedLoading(true);
+    const res = await clientSafetyService.triggerRedSOS({
+      rideId: activeRide.id,
+      latitude: currentLoc?.latitude,
+      longitude: currentLoc?.longitude,
+      accuracy: currentLoc?.accuracy,
+    });
+    setRedLoading(false);
+
+    if (res.success) {
+      setIsHighFrequencyTracking(true);
+      showToast(
+        `RED EMERGENCY SOS ACTIVATED! Admin Command Center & ${res.nearbyUsersCount ?? 0} nearby active units notified.`,
+        'danger'
+      );
+    } else {
+      showToast(res.error || 'Failed to trigger Red Emergency SOS', 'danger');
+    }
+  };
+
+  // 999 Emergency Call Action
+  const handle999EmergencyCall = async () => {
+    const url = 'tel:999';
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported && Platform.OS !== 'web') {
+        await Linking.openURL(url);
+      } else {
+        setShowEmergencyCallModal(true);
+      }
+    } catch {
+      setShowEmergencyCallModal(true);
+    }
+  };
+
+  // Passenger Unilateral Safety Override & Termination
+  const handlePassengerOverrideTerminate = async () => {
+    if (!activeRide) return;
+    setOverrideLoading(true);
+    const res = await clientSafetyService.passengerOverrideTerminate(
+      activeRide.id,
+      'Passenger unilateral safety abort'
+    );
+    setOverrideLoading(false);
+
+    if (res.success) {
+      setIsHighFrequencyTracking(false);
+      setActiveRide(null);
+      showToast('Ride safely terminated via passenger safety override.', 'info');
+      pollActiveRide();
+    } else {
+      showToast(res.error || 'Failed to execute safety override', 'danger');
     }
   };
 
@@ -479,7 +574,7 @@ export const PassengerDashboardView: React.FC = () => {
               </View>
             </View>
 
-            {/* Confirmation Button */}
+            {/* Drop-off Confirmation Button */}
             {(activeRide.status === 'WAITING_PASSENGER_CONFIRM' || activeRide.status === 'ACTIVE') && (
               <View style={{ marginTop: spacing.sm }}>
                 <Button
@@ -492,6 +587,70 @@ export const PassengerDashboardView: React.FC = () => {
                 />
               </View>
             )}
+
+            {/* PASSENGER SAFETY & EMERGENCY COMMAND SECTION (ONLY ON ACTIVE RIDES) */}
+            <View style={[styles.safetyContainer, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+              <View style={styles.safetyHeaderRow}>
+                <Icon name="shield" size={18} color={colors.primary} />
+                <Text style={[styles.safetyHeaderTitle, { color: colors.textPrimary }]}>
+                  Safety & Emergency Command
+                </Text>
+                {isHighFrequencyTracking && (
+                  <Badge label="HIGH-FREQ GPS ACTIVE" variant="danger" />
+                )}
+              </View>
+              <Text style={[styles.safetyHeaderDesc, { color: colors.textSecondary }]}>
+                Immediate multi-tier safety controls for authenticated active rides.
+              </Text>
+
+              {/* Primary Safety Action Buttons Grid */}
+              <View style={styles.safetyButtonsGrid}>
+                {/* Yellow Safety Alert */}
+                <TouchableOpacity
+                  style={[styles.yellowSafetyBtn, { backgroundColor: '#D97706' }]}
+                  onPress={handleYellowAlert}
+                  disabled={yellowLoading}
+                  activeOpacity={0.8}
+                >
+                  <Icon name="alert-triangle" size={18} color="#FFFFFF" />
+                  <Text style={styles.yellowSafetyText}>
+                    {yellowLoading ? 'Sending Alert...' : 'Yellow Safety Alert'}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Red Emergency SOS */}
+                <TouchableOpacity
+                  style={[styles.redSosBtn, { backgroundColor: '#DC2626' }]}
+                  onPress={() => setShowRedConfirmModal(true)}
+                  disabled={redLoading}
+                  activeOpacity={0.8}
+                >
+                  <Icon name="shield" size={18} color="#FFFFFF" />
+                  <Text style={styles.redSosText}>
+                    {redLoading ? 'Activating SOS...' : 'RED Emergency SOS'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Secondary Safety Actions */}
+              <View style={styles.secondarySafetyRow}>
+                <Button
+                  title="999 Emergency Call"
+                  variant="outline"
+                  size="sm"
+                  icon={<Icon name="phone" size={14} color={colors.danger} />}
+                  onPress={handle999EmergencyCall}
+                />
+                <Button
+                  title="Safety Override & Terminate"
+                  variant="danger"
+                  size="sm"
+                  loading={overrideLoading}
+                  icon={<Icon name="x-circle" size={14} color="#FFFFFF" />}
+                  onPress={handlePassengerOverrideTerminate}
+                />
+              </View>
+            </View>
           </CardBody>
         </Card>
       ) : (
@@ -692,6 +851,75 @@ export const PassengerDashboardView: React.FC = () => {
           )}
         </CardBody>
       </Card>
+
+      {/* MODAL 1: RED EMERGENCY SOS CONFIRMATION */}
+      <Modal
+        visible={showRedConfirmModal}
+        onClose={() => setShowRedConfirmModal(false)}
+        title="Trigger RED Emergency SOS"
+      >
+        <View style={styles.modalContentCol}>
+          <View style={styles.modalWarningHeader}>
+            <Icon name="shield" size={28} color={colors.danger} />
+            <Text style={[styles.modalWarningTitle, { color: colors.danger }]}>
+              Confirm High-Priority Emergency Trigger
+            </Text>
+          </View>
+          <Text style={[styles.modalBodyText, { color: colors.textSecondary }]}>
+            This action instantly creates an urgent <Text style={{ fontWeight: '700', color: colors.danger }}>RED SOS Event</Text>.
+            The Admin Command Center will be notified immediately, high-frequency GPS tracking will be engaged, emergency SMS alerts will be generated, and eligible active units within 500 meters will be queried.
+          </Text>
+          <View style={styles.modalActionRow}>
+            <Button
+              title="Cancel"
+              variant="outline"
+              size="md"
+              onPress={() => setShowRedConfirmModal(false)}
+            />
+            <Button
+              title="CONFIRM RED EMERGENCY SOS"
+              variant="danger"
+              size="md"
+              loading={redLoading}
+              icon={<Icon name="shield" size={16} color="#FFFFFF" />}
+              onPress={handleRedSOSConfirm}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL 2: 999 EMERGENCY CALL HOTLINE INFO */}
+      <Modal
+        visible={showEmergencyCallModal}
+        onClose={() => setShowEmergencyCallModal(false)}
+        title="Bangladesh Emergency 999 Hotline"
+      >
+        <View style={styles.modalContentCol}>
+          <View style={styles.modalWarningHeader}>
+            <Icon name="phone" size={28} color={colors.primary} />
+            <Text style={[styles.modalWarningTitle, { color: colors.primary }]}>
+              Direct Emergency Services Hotline
+            </Text>
+          </View>
+          <Text style={[styles.modalBodyText, { color: colors.textSecondary }]}>
+            Dial <Text style={{ fontWeight: '800', color: colors.primary }}>999</Text> directly on your mobile device keypad to reach National Emergency Services in Bangladesh (Police, Fire, Ambulance).
+          </Text>
+          <View style={styles.emergencyBox}>
+            <Text style={[styles.emergencyBoxNumber, { color: colors.primary }]}>999</Text>
+            <Text style={[styles.emergencyBoxSub, { color: colors.textMuted }]}>
+              Toll-Free 24/7 Emergency Dispatch
+            </Text>
+          </View>
+          <View style={styles.modalActionRow}>
+            <Button
+              title="Close Emergency Help"
+              variant="primary"
+              size="md"
+              onPress={() => setShowEmergencyCallModal(false)}
+            />
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -763,6 +991,73 @@ const styles = StyleSheet.create({
   },
   activeRideBody: {
     gap: spacing.md,
+  },
+  safetyContainer: {
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
+    borderWidth: 1,
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  safetyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexWrap: 'wrap',
+  },
+  safetyHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    flex: 1,
+  },
+  safetyHeaderDesc: {
+    fontSize: 12,
+  },
+  safetyButtonsGrid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    flexWrap: 'wrap',
+    marginTop: spacing.xs,
+  },
+  yellowSafetyBtn: {
+    flex: 1,
+    minWidth: 160,
+    paddingVertical: spacing.sm + 4,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  yellowSafetyText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  redSosBtn: {
+    flex: 1,
+    minWidth: 160,
+    paddingVertical: spacing.sm + 4,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+  redSosText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  secondarySafetyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+    marginTop: spacing.xs,
   },
   locationPanel: {
     width: '100%',
@@ -869,5 +1164,45 @@ const styles = StyleSheet.create({
   simActionRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  modalContentCol: {
+    gap: spacing.md,
+  },
+  modalWarningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+  },
+  modalWarningTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  modalBodyText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  modalActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  emergencyBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: '#D97706',
+    backgroundColor: '#FEF3C7',
+  },
+  emergencyBoxNumber: {
+    fontSize: 36,
+    fontWeight: '900',
+  },
+  emergencyBoxSub: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 4,
   },
 });

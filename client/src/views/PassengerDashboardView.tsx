@@ -426,6 +426,32 @@ export const PassengerDashboardView: React.FC = () => {
     }
   };
 
+  const handleEmergencySmsLaunch = async () => {
+    const vehicleNum = (activeRide?.vehicleId as any)?.shortVehicleNumber || 'Electric Rickshaw';
+    const lat = currentLoc?.latitude ? currentLoc.latitude.toFixed(5) : '23.8103';
+    const lng = currentLoc?.longitude ? currentLoc.longitude.toFixed(5) : '90.4125';
+    const rideRef = activeRide?.rideId || 'ACTIVE_TRIP';
+    const bodyText = encodeURIComponent(`RIK-RIDE EMERGENCY - Vehicle: ${vehicleNum}, GPS: https://maps.google.com/?q=${lat},${lng}, Ride Ref: ${rideRef}`);
+    const smsUrl = `sms:?body=${bodyText}`;
+
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.location.href = smsUrl;
+        showToast('Emergency SMS URI launched in device messaging client.', 'info');
+      } else {
+        const supported = await Linking.canOpenURL(smsUrl);
+        if (supported) {
+          await Linking.openURL(smsUrl);
+          showToast('Emergency SMS client opened.', 'info');
+        } else {
+          showToast(`Emergency SMS Text: RIK-RIDE EMERGENCY Vehicle ${vehicleNum} at [${lat}, ${lng}]`, 'warning');
+        }
+      }
+    } catch {
+      showToast(`Emergency SMS Text: RIK-RIDE EMERGENCY Vehicle ${vehicleNum} at [${lat}, ${lng}]`, 'warning');
+    }
+  };
+
   const handlePassengerOverrideTerminate = async () => {
     if (!activeRide) return;
     setOverrideLoading(true);
@@ -870,6 +896,13 @@ export const PassengerDashboardView: React.FC = () => {
                   size="sm"
                   icon={<Icon name="phone" size={14} color={colors.danger} />}
                   onPress={handle999EmergencyCall}
+                />
+                <Button
+                  title="Emergency SMS"
+                  variant="outline"
+                  size="sm"
+                  icon={<Icon name="message-square" size={14} color={colors.warning} />}
+                  onPress={handleEmergencySmsLaunch}
                 />
                 <Button
                   title="Safety Override & Terminate"

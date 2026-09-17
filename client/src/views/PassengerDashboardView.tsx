@@ -334,6 +334,23 @@ export const PassengerDashboardView: React.FC = () => {
     }
   };
 
+  // Cancel Ride Request
+  const [cancellingRide, setCancellingRide] = useState(false);
+  const handleCancelRide = async () => {
+    if (!activeRide) return;
+    setCancellingRide(true);
+    const res = await clientRideService.cancelPassengerRide(activeRide.id, 'Cancelled by passenger');
+    setCancellingRide(false);
+
+    if (res.success) {
+      showToast('Ride request cancelled.', 'info');
+      setActiveRide(null);
+      pollActiveRide();
+    } else {
+      showToast(res.error || 'Failed to cancel ride request', 'danger');
+    }
+  };
+
   // Confirm Ride Drop-off Completion
   const handleConfirmCompletion = async () => {
     if (!activeRide) return;
@@ -481,24 +498,66 @@ export const PassengerDashboardView: React.FC = () => {
           }
         />
         <CardBody style={styles.radarBody}>
-          {/* Real Interactive Discovery Map */}
-          <RealMapContainer
-            latitude={currentLoc?.latitude ?? 23.8103}
-            longitude={currentLoc?.longitude ?? 90.4125}
-            accuracy={currentLoc?.accuracy}
-            status={sharingStatus}
-            title="Dhaka Electric Rickshaw Discovery Radar"
-            subtitle={
-              currentLoc && sharingStatus === 'LOCATION_ACTIVE'
-                ? `Position: [${currentLoc.latitude.toFixed(4)}, ${currentLoc.longitude.toFixed(4)}] • 2 km Radius Stream`
-                : 'Showing Available Operational Rickshaws across Dhaka Sector'
-            }
-            height={420}
-            allowExpand={true}
-            rickshawMarkers={nearbyRickshaws}
-            isPassengerView={true}
-            onTargetedRequest={handleTargetedRideRequest}
-          />
+          {/* Real Interactive Discovery Map (Renders live assigned driver location during active trip) */}
+          {(() => {
+            const activeDriverMarker: NearbyRickshaw | null =
+              activeRide &&
+              activeRide.driverLocation &&
+              ['ACCEPTED', 'ACTIVE', 'WAITING_PASSENGER_CONFIRM'].includes(activeRide.status)
+                ? {
+                    id: activeRide.id,
+                    driverId: (activeRide.driverId as any)?._id || 'driver',
+                    driverName: (activeRide.driverId as any)?.name || 'Assigned Driver',
+                    driverPhone: (activeRide.driverId as any)?.phone || 'N/A',
+                    vehicleId: (activeRide.vehicleId as any)?._id || 'vehicle',
+                    customVehicleId: (activeRide.vehicleId as any)?.shortVehicleNumber || 'Rickshaw',
+                    shortVehicleNumber: (activeRide.vehicleId as any)?.shortVehicleNumber || 'Rickshaw',
+                    registrationNumber: (activeRide.vehicleId as any)?.registrationNumber || 'N/A',
+                    qrIdentifier: 'ASSIGNED_VEHICLE',
+                    ownershipType: 'APPROVED',
+                    modelName: 'Electric Rickshaw',
+                    verificationStatus: 'APPROVED',
+                    status: activeRide.status,
+                    latitude: activeRide.driverLocation.latitude,
+                    longitude: activeRide.driverLocation.longitude,
+                    accuracy: activeRide.driverLocation.accuracy,
+                    speed: activeRide.driverLocation.speed,
+                    heading: activeRide.driverLocation.heading,
+                    distanceKm: null,
+                    avgRating: null,
+                    ratingsCount: 0,
+                    completedRidesCount: 0,
+                    isDriverVerifiedForVehicle: true,
+                    updatedAt: activeRide.driverLocation.updatedAt,
+                  }
+                : null;
+
+            const mapRickshawMarkers = activeDriverMarker
+              ? [activeDriverMarker, ...nearbyRickshaws.filter((r) => r.vehicleId !== (activeRide?.vehicleId as any)?._id)]
+              : nearbyRickshaws;
+
+            return (
+              <RealMapContainer
+                latitude={currentLoc?.latitude ?? 23.8103}
+                longitude={currentLoc?.longitude ?? 90.4125}
+                accuracy={currentLoc?.accuracy}
+                status={sharingStatus}
+                title="Dhaka Electric Rickshaw Discovery Radar"
+                subtitle={
+                  activeRide && activeDriverMarker
+                    ? `Live Ride Telemetry • Driver ${activeDriverMarker.driverName} (${activeDriverMarker.shortVehicleNumber})`
+                    : currentLoc && sharingStatus === 'LOCATION_ACTIVE'
+                    ? `Position: [${currentLoc.latitude.toFixed(4)}, ${currentLoc.longitude.toFixed(4)}] • 2 km Radius Stream`
+                    : 'Showing Available Operational Rickshaws across Dhaka Sector'
+                }
+                height={420}
+                allowExpand={true}
+                rickshawMarkers={mapRickshawMarkers}
+                isPassengerView={true}
+                onTargetedRequest={handleTargetedRideRequest}
+              />
+            );
+          })()}
 
           {/* COMPACT CUSTOMER-FACING LOCATION STATUS BAR (Unified Single Source of Truth) */}
           <View style={[styles.compactStatusBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
@@ -715,6 +774,20 @@ export const PassengerDashboardView: React.FC = () => {
                 </Text>
               </View>
             </View>
+
+            {/* Pre-Active Cancel Request Action */}
+            {(activeRide.status === 'INITIATED' || activeRide.status === 'ACCEPTED') && (
+              <View style={{ marginTop: spacing.xs }}>
+                <Button
+                  title="Cancel Ride Request"
+                  variant="outline"
+                  size="md"
+                  loading={cancellingRide}
+                  icon={<Icon name="x" size={16} color={colors.textPrimary} />}
+                  onPress={handleCancelRide}
+                />
+              </View>
+            )}
 
             {/* Drop-off Confirmation Button */}
             {(activeRide.status === 'WAITING_PASSENGER_CONFIRM' || activeRide.status === 'ACTIVE') && (

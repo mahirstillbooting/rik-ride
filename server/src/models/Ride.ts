@@ -7,8 +7,10 @@ export type RideStatus =
   | 'ACTIVE'
   | 'WAITING_PASSENGER_CONFIRM'
   | 'COMPLETED'
+  | 'DECLINED'
   | 'CANCELLED'
-  | 'EXPIRED';
+  | 'EXPIRED'
+  | 'ORPHANED';
 
 export type PaymentMethod = 'CASH' | 'BKASH' | 'NAGAD' | 'OTHER_MFS';
 
@@ -56,6 +58,7 @@ export interface IRide extends Document {
   startedAt?: Date;
   completionRequestedAt?: Date;
   completedAt?: Date;
+  declinedAt?: Date;
   cancelledAt?: Date;
   cancellationReason?: string;
   
@@ -82,8 +85,10 @@ const RideSchema = new Schema<IRide>(
         'ACTIVE',
         'WAITING_PASSENGER_CONFIRM',
         'COMPLETED',
+        'DECLINED',
         'CANCELLED',
         'EXPIRED',
+        'ORPHANED',
       ],
       default: 'INITIATED',
       index: true,

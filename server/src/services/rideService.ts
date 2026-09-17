@@ -202,6 +202,57 @@ export class RideService {
   }
 
   /**
+   * Driver declines a pending ride dispatch request
+   */
+  public async declineDriverRide(driverId: string, rideId: string) {
+    const ride = await Ride.findOne({
+      _id: rideId,
+      status: 'INITIATED',
+    });
+
+    if (!ride) {
+      return { success: false, statusCode: 404, error: 'Pending ride request not found.' };
+    }
+
+    ride.status = 'DECLINED';
+    ride.declinedAt = new Date();
+    ride.cancellationReason = 'Declined by targeted driver';
+    await ride.save();
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'Ride request declined.',
+    };
+  }
+
+  /**
+   * Passenger cancels an initiated or accepted ride request before active trip
+   */
+  public async cancelPassengerRide(passengerId: string, rideId: string, reason?: string) {
+    const ride = await Ride.findOne({
+      _id: rideId,
+      passengerId,
+      status: { $in: ['INITIATED', 'ACCEPTED'] },
+    });
+
+    if (!ride) {
+      return { success: false, statusCode: 404, error: 'Active ride request eligible for cancellation not found.' };
+    }
+
+    ride.status = 'CANCELLED';
+    ride.cancelledAt = new Date();
+    ride.cancellationReason = reason || 'Cancelled by passenger';
+    await ride.save();
+
+    return {
+      success: true,
+      statusCode: 200,
+      message: 'Ride request cancelled successfully.',
+    };
+  }
+
+  /**
    * Atomic First-Trigger-Wins Dispatch
    * Atomically assigns ride to first driver whose request arrives at backend
    */
@@ -210,6 +261,20 @@ export class RideService {
     const eligibility = await locationService.verifyDriverEligibility(driverId);
     if (!eligibility.eligible || !eligibility.vehicle) {
       return { success: false, statusCode: 403, error: eligibility.reason };
+    }
+
+    // Check if driver is already engaged in an active trip
+    const existingDriverActiveRide = await Ride.findOne({
+      driverId,
+      status: { $in: ['ACCEPTED', 'ACTIVE', 'WAITING_PASSENGER_CONFIRM'] },
+    });
+
+    if (existingDriverActiveRide) {
+      return {
+        success: false,
+        statusCode: 409,
+        error: `Driver is already engaged in active trip [${existingDriverActiveRide.rideId}]. Finish current trip before accepting new rides.`,
+      };
     }
 
     const vehicle = eligibility.vehicle;
@@ -390,7 +455,7 @@ export class RideService {
   }
 
   /**
-   * Get active ride for authenticated passenger
+   * Get active ride for authenticated passenger (with live driver location telemetry)
    */
   public async getPassengerActiveRide(passengerId: string) {
     const ride = await Ride.findOne({
@@ -401,14 +466,39 @@ export class RideService {
       .populate('vehicleId', 'shortVehicleNumber registrationNumber modelName')
       .lean();
 
+    if (!ride) {
+      return { success: true, ride: null };
+    }
+
+    let driverLocation: any = null;
+    if (ride.driverId) {
+      const driverId = (ride.driverId as any)._id || ride.driverId;
+      const dLoc = await DriverLocation.findOne({ driverId }).lean();
+      if (dLoc) {
+        driverLocation = {
+          latitude: dLoc.latitude,
+          longitude: dLoc.longitude,
+          accuracy: dLoc.accuracy,
+          speed: dLoc.speed,
+          heading: dLoc.heading,
+          status: dLoc.status,
+          updatedAt: dLoc.timestamp || dLoc.updatedAt,
+        };
+      }
+    }
+
     return {
       success: true,
-      ride: ride || null,
+      ride: {
+        ...ride,
+        id: ride._id.toString(),
+        driverLocation,
+      },
     };
   }
 
   /**
-   * Get active ride for authenticated driver
+   * Get active ride for authenticated driver (with live passenger location telemetry ONLY when trip is ACTIVE/ENDING)
    */
   public async getDriverActiveRide(driverId: string) {
     const ride = await Ride.findOne({
@@ -419,9 +509,35 @@ export class RideService {
       .populate('vehicleId', 'shortVehicleNumber registrationNumber')
       .lean();
 
+    if (!ride) {
+      return { success: true, ride: null };
+    }
+
+    let passengerLocation: any = null;
+    // PRIVACY RULE: Share exact passenger live GPS ONLY when trip is ACTIVE or WAITING_PASSENGER_CONFIRM
+    if (ride.status === 'ACTIVE' || ride.status === 'WAITING_PASSENGER_CONFIRM') {
+      const passengerId = (ride.passengerId as any)._id || ride.passengerId;
+      const pLoc = await PassengerLocation.findOne({ passengerId }).lean();
+      if (pLoc) {
+        passengerLocation = {
+          latitude: pLoc.latitude,
+          longitude: pLoc.longitude,
+          accuracy: pLoc.accuracy,
+          speed: pLoc.speed,
+          heading: pLoc.heading,
+          status: pLoc.status,
+          updatedAt: pLoc.timestamp || pLoc.updatedAt,
+        };
+      }
+    }
+
     return {
       success: true,
-      ride: ride || null,
+      ride: {
+        ...ride,
+        id: ride._id.toString(),
+        passengerLocation,
+      },
     };
   }
 

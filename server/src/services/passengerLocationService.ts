@@ -233,6 +233,13 @@ export class PassengerLocationService {
       if (!driver || driver.accountStatus !== 'ACTIVE') continue;
       if (!vehicle || vehicle.verificationStatus !== 'APPROVED' || vehicle.status !== 'AVAILABLE') continue;
 
+      // Exclude vehicles or drivers currently engaged in an active trip
+      const hasActiveRide = await Ride.exists({
+        $or: [{ driverId: driver._id }, { vehicleId: vehicle._id }],
+        status: { $in: ['ACCEPTED', 'ACTIVE', 'WAITING_PASSENGER_CONFIRM'] },
+      });
+      if (hasActiveRide) continue;
+
       // Calculate distance if passenger location is available
       let distanceKm: number | null = null;
       if (latitude !== undefined && longitude !== undefined && !isNaN(latitude) && !isNaN(longitude)) {

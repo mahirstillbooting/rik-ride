@@ -13,6 +13,7 @@ import locationRoutes from './routes/locationRoutes';
 import passengerLocationRoutes from './routes/passengerLocationRoutes';
 import rideRoutes from './routes/rideRoutes';
 import safetyRoutes from './routes/safetyRoutes';
+import analyticsRoutes from './routes/analyticsRoutes';
 
 validateEnv();
 
@@ -25,6 +26,7 @@ app.use(express.json());
 // Register API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin', analyticsRoutes);
 app.use('/api/garage', garageRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/driver/location', locationRoutes);

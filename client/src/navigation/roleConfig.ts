@@ -39,6 +39,7 @@ export const ROLE_CONFIGS: Record<UserRole, RoleNavigationConfig> = {
     description: 'Central operational monitoring and entity approval command center',
     navItems: [
       { id: 'admin-overview', label: 'Overview', iconName: 'grid' },
+      { id: 'admin-analytics', label: 'Analytics & Reports', iconName: 'bar-chart' },
       { id: 'admin-approvals', label: 'Approval Queue', iconName: 'check-square', badgeText: 'Queue' },
       { id: 'admin-users', label: 'Users', iconName: 'users' },
       { id: 'admin-garages', label: 'Garages', iconName: 'briefcase' },

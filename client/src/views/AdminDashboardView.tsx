@@ -35,6 +35,7 @@ import {
 } from '../services/adminService';
 import { clientRideService, RideData, HistoricalTripSummary, DetailedTripRecord } from '../services/rideService';
 import { clientSafetyService, SafetyEventData } from '../services/safetyService';
+import { AdminAnalyticsView } from './AdminAnalyticsView';
 
 export const AdminDashboardView: React.FC = () => {
   const { colors, mode } = useTheme();
@@ -1464,6 +1465,13 @@ export const AdminDashboardView: React.FC = () => {
                     </Text>
                   </CardBody>
                 </Card>
+              </View>
+            )}
+
+            {/* TAB 10: ANALYTICS & OPERATIONAL REPORTING */}
+            {currentNavItem.id === 'admin-analytics' && (
+              <View style={styles.viewSection}>
+                <AdminAnalyticsView />
               </View>
             )}
           </>

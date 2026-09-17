@@ -14,6 +14,7 @@ import passengerLocationRoutes from './routes/passengerLocationRoutes';
 import rideRoutes from './routes/rideRoutes';
 import safetyRoutes from './routes/safetyRoutes';
 import analyticsRoutes from './routes/analyticsRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 
 validateEnv();
 
@@ -33,6 +34,7 @@ app.use('/api/driver/location', locationRoutes);
 app.use('/api/passenger/location', passengerLocationRoutes);
 app.use('/api/ride', rideRoutes);
 app.use('/api/safety', safetyRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health & Verification Endpoint
 app.get('/api/health', (_req, res) => {

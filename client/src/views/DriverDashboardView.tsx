@@ -170,6 +170,22 @@ export const DriverDashboardView: React.FC = () => {
     return () => clearInterval(interval);
   }, [loadDriverData, syncLocationStatus, pollDriverRides]);
 
+  const [decliningRideId, setDecliningRideId] = useState<string | null>(null);
+
+  // Decline Ride Request
+  const handleDeclineRide = async (rideId: string) => {
+    setDecliningRideId(rideId);
+    const res = await clientRideService.declineDriverRide(rideId);
+    setDecliningRideId(null);
+
+    if (res.success) {
+      showToast('Ride request declined', 'info');
+      pollDriverRides();
+    } else {
+      showToast(res.error || 'Failed to decline ride request', 'danger');
+    }
+  };
+
   // Accept Ride (Atomic First-Trigger-Wins)
   const handleAcceptRide = async (rideId: string) => {
     setAcceptingRideId(rideId);
@@ -694,6 +710,21 @@ export const DriverDashboardView: React.FC = () => {
                   : 'Location Sharing Inactive — Tap "Start Live Location Sharing" to stream live GPS'
               }
               height={360}
+              passengerMarkers={
+                activeRide?.passengerLocation && (activeRide.status === 'ACTIVE' || activeRide.status === 'WAITING_PASSENGER_CONFIRM')
+                  ? [
+                      {
+                        id: 'active-passenger-loc',
+                        type: 'PASSENGER' as const,
+                        lat: activeRide.passengerLocation.latitude,
+                        lng: activeRide.passengerLocation.longitude,
+                        accuracy: activeRide.passengerLocation.accuracy,
+                        label: activeRide.passengerPseudonym || 'Passenger Unit',
+                        sublabel: `Live Passenger • Trip [${activeRide.rideId}]`,
+                      },
+                    ]
+                  : []
+              }
             />
           </View>
 
@@ -904,6 +935,14 @@ export const DriverDashboardView: React.FC = () => {
                         loading={acceptingRideId === ride.id}
                         icon={<Icon name="check" size={14} color="#FFFFFF" />}
                         onPress={() => handleAcceptRide(ride.id)}
+                      />
+                      <Button
+                        title="DECLINE"
+                        variant="outline"
+                        size="sm"
+                        loading={decliningRideId === ride.id}
+                        icon={<Icon name="x" size={14} color={colors.textPrimary} />}
+                        onPress={() => handleDeclineRide(ride.id)}
                       />
                     </View>
                   </View>

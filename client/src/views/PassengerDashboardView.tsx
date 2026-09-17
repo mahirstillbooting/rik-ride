@@ -23,7 +23,7 @@ export const PassengerDashboardView: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  // Core Location & Permission States
+  // Core Location & Permission States (Unified Source of Truth)
   const [sharingStatus, setSharingStatus] = useState<SharingStatus>('LOCATION_OFF');
   const [isSharing, setIsSharing] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<'Granted' | 'Denied' | 'Not requested'>('Not requested');
@@ -66,6 +66,7 @@ export const PassengerDashboardView: React.FC = () => {
   // Tracking refs
   const watchIdRef = useRef<number | null>(null);
   const lastSentTsRef = useRef<number>(0);
+  const autoPromptedRef = useRef<boolean>(false);
 
   // Sync initial location status from backend
   const syncLocationStatus = useCallback(async () => {
@@ -122,15 +123,6 @@ export const PassengerDashboardView: React.FC = () => {
     };
   }, [syncLocationStatus, pollActiveRide, fetchNearbyRickshaws]);
 
-  // Cleanup location tracking on unmount
-  useEffect(() => {
-    return () => {
-      if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchIdRef.current);
-      }
-    };
-  }, []);
-
   // Location update handler with high-frequency support during emergency
   const sendLocationUpdate = useCallback(
     async (
@@ -177,7 +169,7 @@ export const PassengerDashboardView: React.FC = () => {
         if (res.error?.includes('Stale location')) {
           console.warn('Passenger location update rejected as stale:', res.error);
         } else {
-          setLocationError(res.error || 'Failed to sync passenger live location');
+          setLocationError(res.error || 'Failed to sync location');
         }
       }
     },
@@ -185,7 +177,7 @@ export const PassengerDashboardView: React.FC = () => {
   );
 
   // Start Live Location Sharing
-  const handleStartSharing = async () => {
+  const handleStartSharing = useCallback(async () => {
     setStartingSharing(true);
     setLocationError(null);
 
@@ -193,14 +185,12 @@ export const PassengerDashboardView: React.FC = () => {
     setStartingSharing(false);
 
     if (!res.success) {
-      setLocationError(res.error || 'Location sharing initialization failed');
-      showToast(res.error || 'Cannot start location sharing', 'danger');
+      setLocationError(res.error || 'Location initialization failed');
       return;
     }
 
     setIsSharing(true);
     setSharingStatus('LOCATION_ACTIVE');
-    showToast(res.message || 'Passenger location sharing activated!', 'success');
 
     if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
       try {
@@ -217,11 +207,11 @@ export const PassengerDashboardView: React.FC = () => {
             );
           },
           (err) => {
-            console.warn('Passenger Geolocation error:', err.message);
             if (err.code === err.PERMISSION_DENIED) {
               setPermissionStatus('Denied');
+              setSharingStatus('LOCATION_OFF');
             }
-            setLocationError(`GPS notice: ${err.message}. You can use Dev Location Simulator.`);
+            setLocationError(`Location notice: ${err.message}`);
           },
           { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
         );
@@ -229,23 +219,49 @@ export const PassengerDashboardView: React.FC = () => {
       } catch (e: any) {
         console.warn('Failed to attach watchPosition:', e);
       }
-    } else {
-      setLocationError('Device/Browser GPS is not available. Please use Dev Location Simulator.');
     }
-  };
+  }, [sendLocationUpdate]);
 
-  // Stop Live Location Sharing
-  const handleStopSharing = async () => {
-    if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.clearWatch(watchIdRef.current);
-      watchIdRef.current = null;
+  // Automatic Location Request on Mount
+  useEffect(() => {
+    if (autoPromptedRef.current) return;
+    autoPromptedRef.current = true;
+
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setPermissionStatus('Granted');
+          handleStartSharing();
+          sendLocationUpdate(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            pos.coords.accuracy,
+            pos.coords.speed || undefined,
+            pos.coords.heading || undefined,
+            'DEVICE_GPS',
+            true
+          );
+        },
+        (err) => {
+          if (err.code === err.PERMISSION_DENIED) {
+            setPermissionStatus('Denied');
+          } else {
+            setPermissionStatus('Not requested');
+          }
+        },
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 }
+      );
     }
+  }, [handleStartSharing, sendLocationUpdate]);
 
-    await passengerLocationApiService.stopSharing();
-    setIsSharing(false);
-    setSharingStatus('LOCATION_OFF');
-    showToast('Passenger location sharing stopped', 'info');
-  };
+  // Cleanup location tracking on unmount
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
 
   // Dev Simulator trigger
   const handleSimulatedUpdate = () => {
@@ -264,8 +280,8 @@ export const PassengerDashboardView: React.FC = () => {
 
   // Create Ride Request
   const handleRequestRide = async () => {
-    if (!currentLoc) {
-      showToast('Current location required. Please start GPS or set simulated location below first.', 'warning');
+    if (!currentLoc || sharingStatus !== 'LOCATION_ACTIVE') {
+      showToast('Location active required to request pickup.', 'warning');
       return;
     }
 
@@ -306,7 +322,6 @@ export const PassengerDashboardView: React.FC = () => {
 
   // --- SAFETY SYSTEM HANDLERS ---
 
-  // Yellow Safety Alert Handler
   const handleYellowAlert = async () => {
     if (!activeRide) return;
     setYellowLoading(true);
@@ -325,7 +340,6 @@ export const PassengerDashboardView: React.FC = () => {
     }
   };
 
-  // Red Emergency SOS Handler
   const handleRedSOSConfirm = async () => {
     setShowRedConfirmModal(false);
     if (!activeRide) return;
@@ -341,7 +355,7 @@ export const PassengerDashboardView: React.FC = () => {
     if (res.success) {
       setIsHighFrequencyTracking(true);
       showToast(
-        `RED EMERGENCY SOS ACTIVATED! Admin Command Center & ${res.nearbyUsersCount ?? 0} nearby active units notified.`,
+        `RED EMERGENCY SOS ACTIVATED! Operations & ${res.nearbyUsersCount ?? 0} nearby active units notified.`,
         'danger'
       );
     } else {
@@ -349,7 +363,6 @@ export const PassengerDashboardView: React.FC = () => {
     }
   };
 
-  // 999 Emergency Call Action
   const handle999EmergencyCall = async () => {
     const url = 'tel:999';
     try {
@@ -364,7 +377,6 @@ export const PassengerDashboardView: React.FC = () => {
     }
   };
 
-  // Passenger Unilateral Safety Override & Termination
   const handlePassengerOverrideTerminate = async () => {
     if (!activeRide) return;
     setOverrideLoading(true);
@@ -381,20 +393,6 @@ export const PassengerDashboardView: React.FC = () => {
       pollActiveRide();
     } else {
       showToast(res.error || 'Failed to execute safety override', 'danger');
-    }
-  };
-
-  const getStatusBadgeVariant = (status: SharingStatus) => {
-    switch (status) {
-      case 'LOCATION_ACTIVE':
-        return 'success';
-      case 'LOCATION_STALE':
-        return 'warning';
-      case 'LOCATION_ERROR':
-        return 'danger';
-      case 'LOCATION_OFF':
-      default:
-        return 'neutral';
     }
   };
 
@@ -439,9 +437,9 @@ export const PassengerDashboardView: React.FC = () => {
         <CardHeader
           title="Passenger Discovery Radar"
           subtitle={
-            currentLoc
-              ? `Live Dhaka sector radar • Searching within 2 km of your current position`
-              : 'Live Dhaka sector radar • Displaying all available operational rickshaws'
+            currentLoc && sharingStatus === 'LOCATION_ACTIVE'
+              ? `Live Dhaka sector radar • Searching within 2 km of your position`
+              : 'Live Dhaka sector radar • Displaying available operational rickshaws'
           }
           action={
             <Badge
@@ -451,17 +449,6 @@ export const PassengerDashboardView: React.FC = () => {
           }
         />
         <CardBody style={styles.radarBody}>
-          {/* Non-blocking Location Notice when GPS is off */}
-          {!currentLoc && (
-            <View style={[styles.compactNoticeBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-              <Icon name="info" size={16} color={colors.primary} />
-              <Text style={[styles.compactNoticeText, { color: colors.textSecondary }]}>
-                Live GPS is currently off. Showing general Dhaka sector rickshaws. Tap{' '}
-                <Text style={{ fontWeight: '700', color: colors.primary }}>Start Location Sharing</Text> below to refine radar radius to 2 km.
-              </Text>
-            </View>
-          )}
-
           {/* Real Interactive Discovery Map */}
           <RealMapContainer
             latitude={currentLoc?.latitude ?? 23.8103}
@@ -470,7 +457,7 @@ export const PassengerDashboardView: React.FC = () => {
             status={sharingStatus}
             title="Dhaka Electric Rickshaw Discovery Radar"
             subtitle={
-              currentLoc
+              currentLoc && sharingStatus === 'LOCATION_ACTIVE'
                 ? `Position: [${currentLoc.latitude.toFixed(4)}, ${currentLoc.longitude.toFixed(4)}] • 2 km Radius Stream`
                 : 'Showing Available Operational Rickshaws across Dhaka Sector'
             }
@@ -479,6 +466,128 @@ export const PassengerDashboardView: React.FC = () => {
             rickshawMarkers={nearbyRickshaws}
             isPassengerView={true}
           />
+
+          {/* COMPACT CUSTOMER-FACING LOCATION STATUS BAR (Unified Single Source of Truth) */}
+          <View style={[styles.compactStatusBar, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+            <View style={styles.statusLeftRow}>
+              <View
+                style={[
+                  styles.statusIndicatorDot,
+                  {
+                    backgroundColor:
+                      sharingStatus === 'LOCATION_ACTIVE'
+                        ? currentLoc?.accuracy && currentLoc.accuracy > 50
+                          ? '#F59E0B' // Low accuracy warning
+                          : '#10B981' // Active green
+                        : permissionStatus === 'Denied'
+                        ? '#EF4444' // Denied red
+                        : '#9CA3AF', // Inactive gray
+                  },
+                ]}
+              />
+              <View style={styles.statusTextCol}>
+                <Text style={[styles.statusPrimaryText, { color: colors.textPrimary }]}>
+                  {sharingStatus === 'LOCATION_ACTIVE'
+                    ? currentLoc?.accuracy && currentLoc.accuracy > 50
+                      ? 'Location accuracy is low'
+                      : 'Location active'
+                    : permissionStatus === 'Denied'
+                    ? 'Location access is off'
+                    : 'Location needed for discovery'}
+                </Text>
+                <Text style={[styles.statusSubText, { color: colors.textSecondary }]}>
+                  {sharingStatus === 'LOCATION_ACTIVE'
+                    ? currentLoc?.accuracy
+                      ? `Accuracy ±${currentLoc.accuracy.toFixed(0)} m • Updating automatically`
+                      : 'Position synchronized'
+                    : permissionStatus === 'Denied'
+                    ? 'Enable location to discover nearby rickshaws within 2 km.'
+                    : 'Enable location for accurate pickup dispatch.'}
+                </Text>
+              </View>
+            </View>
+
+            {sharingStatus !== 'LOCATION_ACTIVE' && (
+              <Button
+                title="Enable Location"
+                variant="primary"
+                size="sm"
+                loading={startingSharing}
+                icon={<Icon name="navigation" size={14} color="#FFFFFF" />}
+                onPress={handleStartSharing}
+              />
+            )}
+
+            {/* Discreet Dev Simulator Link */}
+            <TouchableOpacity
+              style={styles.devSimToggleBtn}
+              onPress={() => setShowSimPanel(!showSimPanel)}
+            >
+              <Text style={[styles.devSimToggleText, { color: colors.textMuted }]}>
+                {showSimPanel ? 'Hide Dev Tool' : 'Dev Location Tool'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Expandable Dev Location Simulator Panel */}
+          {showSimPanel && (
+            <View style={[styles.simBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+              <Text style={[styles.simHeader, { color: colors.primary }]}>
+                Dev Location Simulator
+              </Text>
+
+              <View style={styles.presetRow}>
+                <TouchableOpacity
+                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  onPress={() => {
+                    setSimLat('23.8103');
+                    setSimLng('90.4125');
+                  }}
+                >
+                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Dhaka Center</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  onPress={() => {
+                    setSimLat('23.7925');
+                    setSimLng('90.4078');
+                  }}
+                >
+                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Gulshan Circle</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                  onPress={() => {
+                    setSimLat('23.7516');
+                    setSimLng('90.3782');
+                  }}
+                >
+                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Dhanmondi 27</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.simInputGrid}>
+                <View style={styles.simInputWrapper}>
+                  <Input label="Latitude" value={simLat} onChangeText={setSimLat} keyboardType="numeric" />
+                </View>
+                <View style={styles.simInputWrapper}>
+                  <Input label="Longitude" value={simLng} onChangeText={setSimLng} keyboardType="numeric" />
+                </View>
+              </View>
+
+              <View style={styles.simActionRow}>
+                <Button
+                  title="Send Simulated Coordinates"
+                  variant="outline"
+                  size="sm"
+                  icon={<Icon name="navigation" size={14} color={colors.textPrimary} />}
+                  onPress={handleSimulatedUpdate}
+                />
+              </View>
+            </View>
+          )}
         </CardBody>
       </Card>
 
@@ -654,7 +763,7 @@ export const PassengerDashboardView: React.FC = () => {
           </CardBody>
         </Card>
       ) : (
-        /* Optional Ride Request Panel */
+        /* OPTIONAL RIDE REQUEST CARD */
         <Card variant="elevated" style={styles.requestCard}>
           <CardHeader
             title="Request an Electric Rickshaw"
@@ -675,182 +784,26 @@ export const PassengerDashboardView: React.FC = () => {
                 variant="primary"
                 size="lg"
                 loading={requestingRide}
-                disabled={!currentLoc}
+                disabled={!currentLoc || sharingStatus !== 'LOCATION_ACTIVE'}
                 icon={<Icon name="navigation" size={18} color="#FFFFFF" />}
                 onPress={handleRequestRide}
               />
-              {!currentLoc && (
-                <Text style={[styles.locWarning, { color: colors.warning }]}>
-                  ℹ️ Enable Live Location Sharing below to request a ride to your location.
-                </Text>
+              {(sharingStatus !== 'LOCATION_ACTIVE' || !currentLoc) && (
+                <View style={styles.reqLocationNoticeRow}>
+                  <Text style={[styles.locNoticeText, { color: colors.textSecondary }]}>
+                    ℹ️ Location access is required to request pickup to your position.
+                  </Text>
+                  <TouchableOpacity onPress={handleStartSharing}>
+                    <Text style={{ fontWeight: '700', color: colors.primary, fontSize: 12 }}>
+                      Enable Location →
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           </CardBody>
         </Card>
       )}
-
-      {/* Live GPS Telemetry & Location Sharing Control Panel */}
-      <Card variant="elevated" style={styles.locationPanel}>
-        <CardHeader
-          title="Passenger Live Location Sharing & GPS Settings"
-          subtitle="Secure device GPS ingestion foundation for authenticated passengers"
-          action={
-            <Badge
-              label={sharingStatus.replace('_', ' ')}
-              variant={getStatusBadgeVariant(sharingStatus)}
-            />
-          }
-        />
-        <CardBody style={styles.locationBody}>
-          {/* Main Action Bar */}
-          <View style={styles.locationControlsRow}>
-            {!isSharing ? (
-              <Button
-                title="Start Location Sharing"
-                variant="primary"
-                size="md"
-                loading={startingSharing}
-                icon={<Icon name="power" size={16} color="#FFFFFF" />}
-                onPress={handleStartSharing}
-              />
-            ) : (
-              <Button
-                title="Stop Location Sharing"
-                variant="danger"
-                size="md"
-                icon={<Icon name="x" size={16} color="#FFFFFF" />}
-                onPress={handleStopSharing}
-              />
-            )}
-
-            <TouchableOpacity
-              style={[
-                styles.simToggleBtn,
-                {
-                  backgroundColor: showSimPanel ? colors.primarySurface : colors.surfaceElevated,
-                  borderColor: showSimPanel ? colors.primary : colors.border,
-                },
-              ]}
-              onPress={() => setShowSimPanel(!showSimPanel)}
-            >
-              <Icon name="settings" size={14} color={showSimPanel ? colors.primary : colors.textSecondary} />
-              <Text style={[styles.simToggleText, { color: showSimPanel ? colors.primary : colors.textSecondary }]}>
-                {showSimPanel ? 'Hide Dev Simulator' : 'Dev Location Simulator'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Active Telemetry Metrics Grid */}
-          <View style={styles.telemetryGrid}>
-            <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-              <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Permission Status</Text>
-              <Text
-                style={[
-                  styles.telemetryVal,
-                  { color: permissionStatus === 'Granted' ? colors.success : permissionStatus === 'Denied' ? colors.danger : colors.textPrimary },
-                ]}
-              >
-                {permissionStatus}
-              </Text>
-            </View>
-
-            <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-              <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Current Position</Text>
-              <Text style={[styles.telemetryVal, { color: colors.primary }]}>
-                {currentLoc ? `${currentLoc.latitude.toFixed(5)}°, ${currentLoc.longitude.toFixed(5)}°` : 'Location Inactive'}
-              </Text>
-            </View>
-
-            <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-              <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>GPS Accuracy</Text>
-              <Text style={[styles.telemetryVal, { color: colors.textPrimary }]}>
-                {currentLoc?.accuracy !== undefined ? `±${currentLoc.accuracy.toFixed(1)} m` : 'N/A'}
-              </Text>
-            </View>
-
-            <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-              <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Last Ingestion</Text>
-              <Text style={[styles.telemetryVal, { color: colors.textSecondary }]}>
-                {lastUpdateTs ? lastUpdateTs.toLocaleTimeString() : 'No updates'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Dev Location Simulator Panel */}
-          {showSimPanel && (
-            <View style={[styles.simBox, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-              <Text style={[styles.simHeader, { color: colors.primary }]}>
-                Dev Passenger GPS Location Simulator
-              </Text>
-              <Text style={[styles.historySub, { color: colors.textSecondary }]}>
-                Use standard Dhaka test locations or enter custom coordinates to simulate passenger position without physical GPS hardware.
-              </Text>
-
-              {/* Presets */}
-              <View style={styles.presetRow}>
-                <TouchableOpacity
-                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => {
-                    setSimLat('23.8103');
-                    setSimLng('90.4125');
-                  }}
-                >
-                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Dhaka Center</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => {
-                    setSimLat('23.7925');
-                    setSimLng('90.4078');
-                  }}
-                >
-                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Gulshan Circle</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => {
-                    setSimLat('23.7516');
-                    setSimLng('90.3782');
-                  }}
-                >
-                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Dhanmondi 27</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.presetBtn, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  onPress={() => {
-                    setSimLat('23.7330');
-                    setSimLng('90.4172');
-                  }}
-                >
-                  <Text style={[styles.presetBtnText, { color: colors.textPrimary }]}>Motijheel Commercial</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.simInputGrid}>
-                <View style={styles.simInputWrapper}>
-                  <Input label="Latitude" value={simLat} onChangeText={setSimLat} keyboardType="numeric" />
-                </View>
-                <View style={styles.simInputWrapper}>
-                  <Input label="Longitude" value={simLng} onChangeText={setSimLng} keyboardType="numeric" />
-                </View>
-              </View>
-
-              <View style={styles.simActionRow}>
-                <Button
-                  title="Send Simulated Coordinates"
-                  variant="outline"
-                  size="sm"
-                  icon={<Icon name="navigation" size={14} color={colors.textPrimary} />}
-                  onPress={handleSimulatedUpdate}
-                />
-              </View>
-            </View>
-          )}
-        </CardBody>
-      </Card>
 
       {/* MODAL 1: RED EMERGENCY SOS CONFIRMATION */}
       <Modal
@@ -867,7 +820,7 @@ export const PassengerDashboardView: React.FC = () => {
           </View>
           <Text style={[styles.modalBodyText, { color: colors.textSecondary }]}>
             This action instantly creates an urgent <Text style={{ fontWeight: '700', color: colors.danger }}>RED SOS Event</Text>.
-            The Admin Command Center will be notified immediately, high-frequency GPS tracking will be engaged, emergency SMS alerts will be generated, and eligible active units within 500 meters will be queried.
+            Operations Command Center will be notified immediately, high-frequency GPS tracking will be engaged, emergency SMS alerts will be generated, and eligible active units within 500 meters will be queried.
           </Text>
           <View style={styles.modalActionRow}>
             <Button
@@ -958,19 +911,49 @@ const styles = StyleSheet.create({
   radarBody: {
     gap: spacing.sm,
   },
-  compactNoticeBar: {
+  compactStatusBar: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
+    paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    flexWrap: 'wrap',
+    marginTop: spacing.xs,
   },
-  compactNoticeText: {
-    fontSize: 12,
+  statusLeftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     flex: 1,
+    minWidth: 200,
+  },
+  statusIndicatorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  statusTextCol: {
+    flex: 1,
+  },
+  statusPrimaryText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  statusSubText: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  devSimToggleBtn: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+  },
+  devSimToggleText: {
+    fontSize: 11,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   requestCard: {
     width: '100%',
@@ -981,9 +964,15 @@ const styles = StyleSheet.create({
   requestActionRow: {
     gap: spacing.xs,
   },
-  locWarning: {
-    fontSize: 12,
+  reqLocationNoticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  locNoticeText: {
+    fontSize: 12,
   },
   activeRideCard: {
     width: '100%',
@@ -1059,31 +1048,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginTop: spacing.xs,
   },
-  locationPanel: {
-    width: '100%',
-  },
-  locationBody: {
-    gap: spacing.md,
-  },
-  locationControlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    flexWrap: 'wrap',
-  },
-  simToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-  },
-  simToggleText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
   alertBanner: {
     padding: spacing.md,
     borderRadius: borderRadius.md,
@@ -1129,13 +1093,11 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     borderWidth: 1,
     gap: spacing.md,
+    marginTop: spacing.xs,
   },
   simHeader: {
     fontSize: 14,
     fontWeight: '800',
-  },
-  historySub: {
-    fontSize: 12,
   },
   presetRow: {
     flexDirection: 'row',

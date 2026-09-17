@@ -38,11 +38,13 @@ export interface NearbyRickshaw {
   accuracy?: number;
   speed?: number;
   heading?: number;
-  distanceKm: number | null;
-  avgRating: number | null;
-  ratingsCount: number;
-  completedRidesCount: number;
-  updatedAt: string;
+  distanceKm?: number | null;
+  avgRating?: number | null;
+  ratingsCount?: number;
+  completedRidesCount?: number;
+  assignedDriverId?: string;
+  isDriverVerifiedForVehicle?: boolean;
+  updatedAt?: string;
 }
 
 class PassengerLocationApiService {

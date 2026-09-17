@@ -14,6 +14,8 @@ export interface RideRequestPayload {
   longitude: number;
   accuracy?: number;
   destinationText?: string;
+  targetVehicleId?: string;
+  targetDriverId?: string;
 }
 
 export class RideService {
@@ -85,7 +87,21 @@ export class RideService {
     const passengerPseudonym = await this.generateDailyPseudonym();
     const approximatePickupArea = this.getApproximatePickupArea(payload.latitude, payload.longitude);
 
-    // 5. Create new Ride document
+    // 5. Handle targeted request vehicle & driver validation
+    let targetVehicleObjectId: Types.ObjectId | undefined;
+    let targetDriverObjectId: Types.ObjectId | undefined;
+    let isTargeted = false;
+
+    if (payload.targetVehicleId && Types.ObjectId.isValid(payload.targetVehicleId)) {
+      targetVehicleObjectId = new Types.ObjectId(payload.targetVehicleId);
+      isTargeted = true;
+    }
+    if (payload.targetDriverId && Types.ObjectId.isValid(payload.targetDriverId)) {
+      targetDriverObjectId = new Types.ObjectId(payload.targetDriverId);
+      isTargeted = true;
+    }
+
+    // 6. Create new Ride document
     const newRide = new Ride({
       rideId,
       passengerId: new Types.ObjectId(passengerId),
@@ -100,6 +116,9 @@ export class RideService {
       pickupAccuracy: payload.accuracy,
       approximatePickupArea,
       destinationText: payload.destinationText?.trim() || undefined,
+      targetVehicleId: targetVehicleObjectId,
+      targetDriverId: targetDriverObjectId,
+      isTargeted,
       requestedAt: new Date(),
     });
 
@@ -108,7 +127,7 @@ export class RideService {
     return {
       success: true,
       statusCode: 201,
-      message: 'Ride request created successfully.',
+      message: isTargeted ? 'Targeted ride request sent to selected rickshaw driver.' : 'Ride request created successfully.',
       ride: {
         id: newRide._id.toString(),
         rideId: newRide.rideId,
@@ -119,6 +138,7 @@ export class RideService {
         pickupLongitude: newRide.pickupLongitude,
         pickupAccuracy: newRide.pickupAccuracy,
         destinationText: newRide.destinationText,
+        isTargeted: newRide.isTargeted,
         requestedAt: newRide.requestedAt,
       },
     };
@@ -141,10 +161,16 @@ export class RideService {
       { status: 'EXPIRED', cancellationReason: 'Acceptance window timed out (15s)' }
     );
 
-    // 3. Fetch active pending requests
+    // 3. Fetch active pending requests (filtering targeted requests to ONLY the targeted driver)
+    const driverObjectId = new Types.ObjectId(driverId);
     const pendingRides = await Ride.find({
       status: 'INITIATED',
       requestedAt: { $gte: timeoutCutoff },
+      $or: [
+        { isTargeted: { $ne: true } },
+        { targetDriverId: driverObjectId },
+        { targetDriverId: { $exists: false } },
+      ],
     })
       .sort({ requestedAt: -1 })
       .lean();
@@ -160,6 +186,7 @@ export class RideService {
         passengerPseudonym: r.passengerPseudonym,
         approximatePickupArea: r.approximatePickupArea,
         destinationText: r.destinationText || 'Standard Drop-off',
+        isTargeted: r.isTargeted,
         requestedAt: r.requestedAt,
         timeoutRemainingMs: Math.round(remainingMs),
       };

@@ -219,7 +219,7 @@ export class PassengerLocationService {
       })
       .populate({
         path: 'vehicleId',
-        select: 'vehicleId shortVehicleNumber registrationNumber qrIdentifier verificationStatus status ownershipType modelName',
+        select: 'vehicleId shortVehicleNumber registrationNumber qrIdentifier verificationStatus status ownershipType modelName assignedDriverId',
       })
       .lean();
 
@@ -257,6 +257,11 @@ export class PassengerLocationService {
       // Count completed rides for driver
       const completedRidesCount = await Ride.countDocuments({ driverId: driver._id, status: 'COMPLETED' });
 
+      // Verify driver ↔ vehicle relationship linkage
+      const isDriverVerifiedForVehicle = vehicle.assignedDriverId
+        ? vehicle.assignedDriverId.toString() === driver._id.toString()
+        : true;
+
       validRickshaws.push({
         id: loc._id.toString(),
         driverId: driver._id.toString(),
@@ -280,6 +285,7 @@ export class PassengerLocationService {
         avgRating,
         ratingsCount,
         completedRidesCount,
+        isDriverVerifiedForVehicle,
         updatedAt: loc.timestamp || loc.updatedAt,
       });
     }

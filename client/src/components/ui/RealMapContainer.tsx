@@ -18,6 +18,7 @@ export interface RealMapContainerProps {
   passengerMarkers?: any[];
   rickshawMarkers?: any[];
   isPassengerView?: boolean;
+  onTargetedRequest?: (rickshaw: any) => void;
   style?: StyleProp<ViewStyle>;
 }
 

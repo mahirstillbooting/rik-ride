@@ -56,6 +56,8 @@ class ClientRideService {
     longitude: number;
     accuracy?: number;
     destinationText?: string;
+    targetVehicleId?: string;
+    targetDriverId?: string;
   }): Promise<{ success: boolean; message?: string; ride?: RideData; error?: string }> {
     try {
       const headers = await this.getAuthHeaders();

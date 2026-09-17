@@ -18,13 +18,15 @@ router.use(requireAuth);
  */
 router.post('/request', requireRole('PASSENGER'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { latitude, longitude, accuracy, destinationText } = req.body;
+    const { latitude, longitude, accuracy, destinationText, targetVehicleId, targetDriverId } = req.body;
 
     const result = await rideService.createRideRequest(req.user!.id, {
       latitude: Number(latitude),
       longitude: Number(longitude),
       accuracy: accuracy !== undefined ? Number(accuracy) : undefined,
       destinationText,
+      targetVehicleId,
+      targetDriverId,
     });
 
     if (!result.success) {

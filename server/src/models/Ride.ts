@@ -39,6 +39,11 @@ export interface IRide extends Document {
   // Speed check for completion request
   lastValidatedSpeed?: number; // km/h
 
+  // Target Driver & Vehicle for targeted dispatch requests
+  targetDriverId?: Types.ObjectId;
+  targetVehicleId?: Types.ObjectId;
+  isTargeted?: boolean;
+
   // Extensible payment & rating fields
   fareAmount?: number;
   currency: string;
@@ -66,6 +71,9 @@ const RideSchema = new Schema<IRide>(
     driverId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
     vehicleId: { type: Schema.Types.ObjectId, ref: 'Vehicle', index: true },
     garageId: { type: Schema.Types.ObjectId, ref: 'Garage', index: true },
+    targetDriverId: { type: Schema.Types.ObjectId, ref: 'User', index: true },
+    targetVehicleId: { type: Schema.Types.ObjectId, ref: 'Vehicle', index: true },
+    isTargeted: { type: Boolean, default: false },
     status: {
       type: String,
       enum: [
@@ -120,6 +128,7 @@ const RideSchema = new Schema<IRide>(
 
 RideSchema.index({ pickupLocation: '2dsphere' });
 RideSchema.index({ driverId: 1, status: 1 });
+RideSchema.index({ targetDriverId: 1, status: 1 });
 RideSchema.index({ passengerId: 1, status: 1 });
 RideSchema.index({ requestedAt: -1 });
 

@@ -33,6 +33,7 @@ export interface RealMapContainerProps {
   passengerMarkers?: MapMarkerItem[];
   rickshawMarkers?: NearbyRickshaw[];
   isPassengerView?: boolean;
+  onTargetedRequest?: (rickshaw: NearbyRickshaw) => void;
 }
 
 export const RealMapContainer: React.FC<RealMapContainerProps> = ({
@@ -48,6 +49,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   passengerMarkers = [],
   rickshawMarkers = [],
   isPassengerView = false,
+  onTargetedRequest,
 }) => {
   const { colors, mode } = useTheme();
 
@@ -222,6 +224,33 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
     };
   }, [isModalOpen]);
 
+  // Ref to hold current onTargetedRequest callback for global window listener
+  const onTargetedRequestRef = useRef(onTargetedRequest);
+  useEffect(() => {
+    onTargetedRequestRef.current = onTargetedRequest;
+  }, [onTargetedRequest]);
+
+  // Expose global window callbacks for Leaflet HTML popover button clicks
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    (window as any).__rikCallDriver = (phone: string) => {
+      handleCallDriver(phone);
+    };
+    (window as any).__rikShowDetails = (vehicleId: string) => {
+      const found = rickshawMarkers.find((r) => r.vehicleId === vehicleId);
+      if (found) {
+        setSelectedRickshaw(found);
+        setShowDetailModal(true);
+      }
+    };
+    (window as any).__rikTargetedRequest = (vehicleId: string) => {
+      const found = rickshawMarkers.find((r) => r.vehicleId === vehicleId);
+      if (found && onTargetedRequestRef.current) {
+        onTargetedRequestRef.current(found);
+      }
+    };
+  }, [rickshawMarkers]);
+
   // Direct Call Handler
   const handleCallDriver = (phone: string) => {
     if (typeof window !== 'undefined') {
@@ -251,10 +280,10 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
       const rickshawIcon = L.divIcon({
         className: 'rik-available-rickshaw-marker',
         html: `
-          <div style="position: relative; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-            <div style="position: absolute; width: 34px; height: 34px; border-radius: 50%; background: rgba(226, 118, 58, 0.25); animation: rikPulse 2.5s infinite ease-in-out;"></div>
-            <div style="width: 28px; height: 28px; border-radius: 8px; background: #18181B; border: 1.5px solid #E2763A; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.6);">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E2763A" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <div style="position: relative; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+            <div style="position: absolute; width: 36px; height: 36px; border-radius: 50%; background: rgba(217, 119, 6, 0.25); animation: rikPulse 2.5s infinite ease-in-out;"></div>
+            <div style="width: 30px; height: 30px; border-radius: 10px; background: #18181B; border: 2px solid #D97706; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.7);">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="1" y="3" width="15" height="13" rx="2"></rect>
                 <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
                 <circle cx="5.5" cy="18.5" r="2.5"></circle>
@@ -263,27 +292,42 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
             </div>
           </div>
         `,
-        iconSize: [34, 34],
-        iconAnchor: [17, 17],
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
       });
 
       const marker = L.marker([r.latitude, r.longitude], { icon: rickshawIcon });
 
-      // Hover Tooltip / Popover for Desktop
+      // Hover Tooltip / Popover for Desktop (with 3 interactive action buttons)
       const tooltipContent = `
-        <div style="padding: 10px 12px; font-family: system-ui, -apple-system, sans-serif; background: #18181B; color: #FAFAFA; border: 1px solid #3F3F46; border-radius: 10px; min-width: 210px; box-shadow: 0 10px 25px rgba(0,0,0,0.7);">
+        <div style="padding: 10px 12px; font-family: system-ui, -apple-system, sans-serif; background: #18181B; color: #FAFAFA; border: 1.5px solid #D97706; border-radius: 10px; min-width: 230px; box-shadow: 0 10px 25px rgba(0,0,0,0.85); transition: opacity 200ms ease-in-out;">
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px;">
-            <span style="font-size: 13px; font-weight: 800; color: #E2763A;">Rickshaw ${r.shortVehicleNumber}</span>
+            <span style="font-size: 13px; font-weight: 800; color: #D97706;">Rickshaw ${r.shortVehicleNumber}</span>
             <span style="font-size: 10px; font-weight: 800; color: #10B981; background: rgba(16,185,129,0.15); border: 1px solid rgba(16,185,129,0.3); padding: 2px 6px; border-radius: 4px;">${r.status}</span>
           </div>
           <div style="font-size: 12px; color: #D4D4D8; margin-bottom: 4px;">
             Driver: <strong>${r.driverName}</strong>
           </div>
-          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #A1A1AA; padding-top: 6px; border-top: 1px solid #27272A;">
+          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #A1A1AA; padding-bottom: 8px; border-bottom: 1px solid #27272A; margin-bottom: 8px;">
             <div>
               ${r.avgRating ? `<span style="color: #F59E0B; font-weight: 800;">★ ${r.avgRating}</span> <span style="color: #71717A;">(${r.ratingsCount})</span>` : `<span style="color: #A1A1AA; font-style: italic;">★ New driver</span>`}
             </div>
-            ${r.distanceKm !== null ? `<span style="color: #E2763A; font-weight: 700;">${r.distanceKm} km away</span>` : ''}
+            ${r.distanceKm !== null ? `<span style="color: #D97706; font-weight: 700;">${r.distanceKm} km away</span>` : ''}
+          </div>
+          <!-- 3 Compact Action Buttons -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+            <button onclick="window.__rikCallDriver('${r.driverPhone}')" title="Call Driver" style="flex: 1; padding: 5px 6px; background: #27272A; border: 1px solid #3F3F46; border-radius: 6px; color: #FAFAFA; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+              Call
+            </button>
+            <button onclick="window.__rikShowDetails('${r.vehicleId}')" title="View Details" style="flex: 1; padding: 5px 6px; background: #27272A; border: 1px solid #3F3F46; border-radius: 6px; color: #FAFAFA; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              Info
+            </button>
+            <button onclick="window.__rikTargetedRequest('${r.vehicleId}')" title="Request this Rickshaw" style="flex: 1; padding: 5px 6px; background: #D97706; border: 1px solid #F59E0B; border-radius: 6px; color: #FFFFFF; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+              Request
+            </button>
           </div>
         </div>
       `;
@@ -292,6 +336,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         direction: 'top',
         offset: [0, -18],
         opacity: 1,
+        interactive: true,
         className: 'rik-custom-leaflet-tooltip',
       });
 
@@ -339,14 +384,15 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
           .addAttribution('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors')
           .addTo(map);
 
-        // Marker Icon: Passenger "YOU" vs Driver Vehicle Marker
+        // Marker Icon: Passenger "YOU ARE HERE" Pin vs Driver Vehicle Marker
         const mainIcon = L.divIcon({
           className: isPassengerView ? 'rik-passenger-user-marker' : 'rik-driver-location-marker',
           html: isPassengerView
             ? `
-              <div style="position: relative; width: 32px; height: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                <div style="width: 14px; height: 14px; border-radius: 50%; background: #10B981; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 10px rgba(0,0,0,0.5);"></div>
-                <div style="font-size: 9px; font-weight: 800; color: #FFFFFF; background: #10B981; padding: 1px 4px; border-radius: 3px; margin-top: 2px; text-transform: uppercase; box-shadow: 0 1px 4px rgba(0,0,0,0.4);">YOU</div>
+              <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;">
+                <div style="position: absolute; top: 12px; width: 32px; height: 32px; border-radius: 50%; background: rgba(16, 185, 129, 0.25); animation: rikPulse 2s infinite ease-in-out;"></div>
+                <div style="background: #10B981; color: #FFFFFF; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 4px; border: 1.5px solid #FFFFFF; box-shadow: 0 3px 10px rgba(0,0,0,0.5); letter-spacing: 0.5px; white-space: nowrap; margin-bottom: 2px;">YOU ARE HERE</div>
+                <div style="width: 14px; height: 14px; border-radius: 50%; background: #10B981; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.6);"></div>
               </div>
             `
             : `
@@ -355,8 +401,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
                 <div style="width: 15px; height: 15px; border-radius: 50%; background: #E2763A; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 10px rgba(0,0,0,0.45);"></div>
               </div>
             `,
-          iconSize: [32, 32],
-          iconAnchor: [16, 16],
+          iconSize: [40, 40],
+          iconAnchor: [20, 20],
         });
 
         const marker = L.marker([deviceCoords.lat, deviceCoords.lng], { icon: mainIcon }).addTo(map);
@@ -494,9 +540,10 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
           className: isPassengerView ? 'rik-passenger-user-marker-modal' : 'rik-driver-location-marker-modal',
           html: isPassengerView
             ? `
-              <div style="position: relative; width: 36px; height: 36px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                <div style="width: 16px; height: 16px; border-radius: 50%; background: #10B981; border: 2.5px solid #FFFFFF; box-shadow: 0 3px 12px rgba(0,0,0,0.5);"></div>
-                <div style="font-size: 10px; font-weight: 800; color: #FFFFFF; background: #10B981; padding: 2px 6px; border-radius: 4px; margin-top: 2px; text-transform: uppercase;">YOU</div>
+              <div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;">
+                <div style="position: absolute; top: 12px; width: 36px; height: 36px; border-radius: 50%; background: rgba(16, 185, 129, 0.25); animation: rikPulse 2s infinite ease-in-out;"></div>
+                <div style="background: #10B981; color: #FFFFFF; font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 4px; border: 1.5px solid #FFFFFF; box-shadow: 0 3px 10px rgba(0,0,0,0.5); letter-spacing: 0.5px; white-space: nowrap; margin-bottom: 2px;">YOU ARE HERE</div>
+                <div style="width: 16px; height: 16px; border-radius: 50%; background: #10B981; border: 2.5px solid #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.6);"></div>
               </div>
             `
             : `
@@ -505,8 +552,8 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
                 <div style="width: 17px; height: 17px; border-radius: 50%; background: #E2763A; border: 2.5px solid #FFFFFF; box-shadow: 0 3px 12px rgba(0,0,0,0.5);"></div>
               </div>
             `,
-          iconSize: [36, 36],
-          iconAnchor: [18, 18],
+          iconSize: [44, 44],
+          iconAnchor: [22, 22],
         });
 
         const marker = L.marker([deviceCoords.lat, deviceCoords.lng], { icon: mainIcon }).addTo(map);
@@ -689,9 +736,9 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
             <View style={styles.actionBtnRow}>
               <Button
                 title="Call Driver"
-                variant="primary"
+                variant="outline"
                 size="sm"
-                icon={<Icon name="phone" size={14} color="#FFFFFF" />}
+                icon={<Icon name="phone" size={14} color={colors.textPrimary} />}
                 onPress={() => handleCallDriver(selectedRickshaw.driverPhone)}
               />
               <Button
@@ -701,6 +748,15 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
                 icon={<Icon name="info" size={14} color={colors.textPrimary} />}
                 onPress={() => setShowDetailModal(true)}
               />
+              {isPassengerView && onTargetedRequest && (
+                <Button
+                  title="Request Rickshaw"
+                  variant="primary"
+                  size="sm"
+                  icon={<Icon name="navigation" size={14} color="#FFFFFF" />}
+                  onPress={() => onTargetedRequest(selectedRickshaw)}
+                />
+              )}
             </View>
           </View>
         )}
@@ -903,9 +959,9 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
                   <View style={styles.actionBtnRow}>
                     <Button
                       title="Call Driver"
-                      variant="primary"
+                      variant="outline"
                       size="sm"
-                      icon={<Icon name="phone" size={14} color="#FFFFFF" />}
+                      icon={<Icon name="phone" size={14} color={colors.textPrimary} />}
                       onPress={() => handleCallDriver(selectedRickshaw.driverPhone)}
                     />
                     <Button
@@ -915,6 +971,15 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
                       icon={<Icon name="info" size={14} color={colors.textPrimary} />}
                       onPress={() => setShowDetailModal(true)}
                     />
+                    {isPassengerView && onTargetedRequest && (
+                      <Button
+                        title="Request Rickshaw"
+                        variant="primary"
+                        size="sm"
+                        icon={<Icon name="navigation" size={14} color="#FFFFFF" />}
+                        onPress={() => onTargetedRequest(selectedRickshaw)}
+                      />
+                    )}
                   </View>
                 </View>
               )}
@@ -994,6 +1059,14 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
                   <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Platform Verification</Text>
                   <Badge label="APPROVED DRIVER" variant="success" />
                 </View>
+
+                <View style={styles.detailGridItem}>
+                  <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Vehicle Authorization</Text>
+                  <Badge
+                    label={selectedRickshaw.isDriverVerifiedForVehicle !== false ? 'AUTHORIZED / LINKED DRIVER' : 'DRIVER NOT LINKED'}
+                    variant={selectedRickshaw.isDriverVerifiedForVehicle !== false ? 'success' : 'warning'}
+                  />
+                </View>
               </View>
             </View>
 
@@ -1031,15 +1104,27 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
               </View>
             </View>
 
-            {/* Call Action */}
+            {/* Action Row */}
             <View style={styles.detailActionRow}>
               <Button
                 title={`Call Driver (${selectedRickshaw.driverName})`}
-                variant="primary"
-                size="lg"
-                icon={<Icon name="phone" size={18} color="#FFFFFF" />}
+                variant="outline"
+                size="md"
+                icon={<Icon name="phone" size={16} color={colors.textPrimary} />}
                 onPress={() => handleCallDriver(selectedRickshaw.driverPhone)}
               />
+              {isPassengerView && onTargetedRequest && (
+                <Button
+                  title="Request this Rickshaw"
+                  variant="primary"
+                  size="md"
+                  icon={<Icon name="navigation" size={16} color="#FFFFFF" />}
+                  onPress={() => {
+                    setShowDetailModal(false);
+                    onTargetedRequest(selectedRickshaw);
+                  }}
+                />
+              )}
             </View>
           </View>
         )}

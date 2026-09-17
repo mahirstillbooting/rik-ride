@@ -278,7 +278,39 @@ export const PassengerDashboardView: React.FC = () => {
     showToast(`Simulated location set: [${lat.toFixed(4)}, ${lng.toFixed(4)}]`, 'success');
   };
 
-  // Create Ride Request
+  // Create Targeted Ride Request for specific discovered Rickshaw
+  const handleTargetedRideRequest = useCallback(
+    async (rickshaw: NearbyRickshaw) => {
+      if (!currentLoc || sharingStatus !== 'LOCATION_ACTIVE') {
+        showToast('Location active required to request pickup.', 'warning');
+        return;
+      }
+
+      setRequestingRide(true);
+      const res = await clientRideService.createRideRequest({
+        latitude: currentLoc.latitude,
+        longitude: currentLoc.longitude,
+        accuracy: currentLoc.accuracy,
+        destinationText: destinationText.trim() || undefined,
+        targetVehicleId: rickshaw.vehicleId,
+        targetDriverId: rickshaw.assignedDriverId || rickshaw.driverId,
+      });
+      setRequestingRide(false);
+
+      if (res.success && res.ride) {
+        setActiveRide(res.ride);
+        showToast(
+          `Targeted ride request dispatched directly to Rickshaw ${rickshaw.shortVehicleNumber} (${rickshaw.driverName})!`,
+          'success'
+        );
+      } else {
+        showToast(res.error || 'Failed to dispatch targeted ride request', 'danger');
+      }
+    },
+    [currentLoc, sharingStatus, destinationText, showToast]
+  );
+
+  // Create Generic Ride Request
   const handleRequestRide = async () => {
     if (!currentLoc || sharingStatus !== 'LOCATION_ACTIVE') {
       showToast('Location active required to request pickup.', 'warning');
@@ -465,6 +497,7 @@ export const PassengerDashboardView: React.FC = () => {
             allowExpand={true}
             rickshawMarkers={nearbyRickshaws}
             isPassengerView={true}
+            onTargetedRequest={handleTargetedRideRequest}
           />
 
           {/* COMPACT CUSTOMER-FACING LOCATION STATUS BAR (Unified Single Source of Truth) */}

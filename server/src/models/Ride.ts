@@ -59,6 +59,10 @@ export interface IRide extends Document {
   targetVehicleId?: Types.ObjectId;
   isTargeted?: boolean;
 
+  // 3-Minute unconfirmed drop-off Admin fallback
+  isAdminReviewPending?: boolean;
+  adminReviewReason?: string;
+
   // Extensible payment & rating fields
   fareAmount?: number;
   currency: string;
@@ -138,6 +142,9 @@ const RideSchema = new Schema<IRide>(
     routePointCount: { type: Number, default: 0 },
 
     lastValidatedSpeed: { type: Number },
+
+    isAdminReviewPending: { type: Boolean, default: false, index: true },
+    adminReviewReason: { type: String },
 
     fareAmount: { type: Number },
     currency: { type: String, default: 'BDT' },

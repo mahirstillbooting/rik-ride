@@ -705,11 +705,48 @@ export class RideService {
   }
 
   /**
-   * Admin monitoring: Fetch all active rides
+   * 3-Minute Admin Fallback: Check unconfirmed completion requests
+   * If status is WAITING_PASSENGER_CONFIRM, completionRequestedAt > 3 mins ago, speed <= 10 km/h,
+   * and no active safety alarm is present, flag ride with isAdminReviewPending: true.
+   */
+  public async checkUnconfirmedRidesFallback() {
+    const threeMinsAgo = new Date(Date.now() - 3 * 60 * 1000);
+    const unconfirmedRides = await Ride.find({
+      status: 'WAITING_PASSENGER_CONFIRM',
+      completionRequestedAt: { $lte: threeMinsAgo },
+      isAdminReviewPending: { $ne: true },
+    });
+
+    for (const ride of unconfirmedRides) {
+      try {
+        const { SafetyEvent } = require('../models/SafetyEvent');
+        const activeSafety = await SafetyEvent.findOne({
+          rideId: ride._id,
+          status: { $in: ['ACTIVE', 'ACKNOWLEDGED'] },
+        });
+
+        if (!activeSafety) {
+          ride.isAdminReviewPending = true;
+          ride.adminReviewReason = 'UNCONFIRMED_DROPOFF_3MIN_TIMEOUT';
+          await ride.save();
+        }
+      } catch (err) {
+        console.error('Error in checkUnconfirmedRidesFallback:', err);
+      }
+    }
+  }
+
+  /**
+   * Admin monitoring: Fetch all active rides & fallback review rides
    */
   public async getAdminActiveRides() {
+    await this.checkUnconfirmedRidesFallback();
+
     const activeRides = await Ride.find({
-      status: { $in: ['INITIATED', 'ACCEPTED', 'ACTIVE', 'WAITING_PASSENGER_CONFIRM'] },
+      $or: [
+        { status: { $in: ['INITIATED', 'ACCEPTED', 'ACTIVE', 'WAITING_PASSENGER_CONFIRM'] } },
+        { isAdminReviewPending: true },
+      ],
     })
       .populate('passengerId', 'name phone')
       .populate('driverId', 'name phone')

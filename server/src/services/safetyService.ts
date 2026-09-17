@@ -92,6 +92,33 @@ export class SafetyService {
       }
     }
 
+    // Idempotency Protection: Check if an active Yellow Safety Alert already exists for this ride
+    const existingActiveEvent = await SafetyEvent.findOne({
+      rideId: ride._id,
+      severity: 'YELLOW',
+      status: { $in: ['ACTIVE', 'ACKNOWLEDGED'] },
+    });
+
+    if (existingActiveEvent) {
+      existingActiveEvent.passengerLocation = { type: 'Point', coordinates: [passLng, passLat] };
+      existingActiveEvent.passengerLatitude = passLat;
+      existingActiveEvent.passengerLongitude = passLng;
+      if (drivLat !== undefined && drivLng !== undefined) {
+        existingActiveEvent.driverLocation = { type: 'Point', coordinates: [drivLng, drivLat] };
+        existingActiveEvent.driverLatitude = drivLat;
+        existingActiveEvent.driverLongitude = drivLng;
+      }
+      existingActiveEvent.timestamp = new Date();
+      await existingActiveEvent.save();
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Active Yellow Safety Alert position updated.',
+        event: existingActiveEvent,
+      };
+    }
+
     const eventId = this.generateEventId();
     const driverUser = ride.driverId as any;
     const vehicleObj = ride.vehicleId as any;
@@ -194,6 +221,35 @@ export class SafetyService {
 
     // Query nearby active users within 500 meters
     const nearbyRes = await this.findNearbyActiveUsers(passLat, passLng, 500);
+
+    // Idempotency Protection: Check if an active RED Emergency SOS already exists for this ride
+    const existingActiveEvent = await SafetyEvent.findOne({
+      rideId: ride._id,
+      severity: 'RED',
+      status: { $in: ['ACTIVE', 'ACKNOWLEDGED'] },
+    });
+
+    if (existingActiveEvent) {
+      existingActiveEvent.passengerLocation = { type: 'Point', coordinates: [passLng, passLat] };
+      existingActiveEvent.passengerLatitude = passLat;
+      existingActiveEvent.passengerLongitude = passLng;
+      if (drivLat !== undefined && drivLng !== undefined) {
+        existingActiveEvent.driverLocation = { type: 'Point', coordinates: [drivLng, drivLat] };
+        existingActiveEvent.driverLatitude = drivLat;
+        existingActiveEvent.driverLongitude = drivLng;
+      }
+      existingActiveEvent.nearbyUsersCount = nearbyRes.totalNearby;
+      existingActiveEvent.timestamp = new Date();
+      await existingActiveEvent.save();
+
+      return {
+        success: true,
+        statusCode: 200,
+        message: 'Active RED Emergency SOS position updated.',
+        event: existingActiveEvent,
+        nearbyUsersCount: nearbyRes.totalNearby,
+      };
+    }
 
     const eventId = this.generateEventId();
     const driverUser = ride.driverId as any;

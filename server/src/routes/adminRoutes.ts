@@ -357,10 +357,16 @@ import { rideService } from '../services/rideService';
 /**
  * GET /api/admin/locations
  * Fetch real-time active driver and active passenger locations for authorized Admin monitoring
+ * Supports operational state filters (statusFilter), live search, and freshness filters
  */
-router.get('/locations', async (_req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.get('/locations', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const locations = await passengerLocationService.getActiveFleetAndPassengerLocations();
+    const { statusFilter, search, freshness } = req.query;
+    const locations = await passengerLocationService.getActiveFleetAndPassengerLocations({
+      statusFilter: statusFilter as string,
+      search: search as string,
+      freshness: freshness as string,
+    });
     res.json(locations);
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to fetch active fleet and passenger locations', details: error.message });

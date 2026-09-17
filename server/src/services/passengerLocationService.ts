@@ -3,6 +3,8 @@ import { PassengerLocation } from '../models/PassengerLocation';
 import { DriverLocation } from '../models/DriverLocation';
 import { Rating } from '../models/Rating';
 import { Ride } from '../models/Ride';
+import { GarageDriver } from '../models/GarageDriver';
+import { SafetyEvent } from '../models/SafetyEvent';
 import { LocationUpdatePayload, locationService } from './locationService';
 
 const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes staleness threshold
@@ -140,31 +142,248 @@ export class PassengerLocationService {
   }
 
   /**
-   * Admin monitoring endpoint: Fetch all active driver & passenger location markers
+   * Admin Live Fleet & Operations Command Center: Fetch all active driver & passenger location markers
+   * enriched with strict driver-vehicle verification, location freshness, operational state, and ride summary.
    */
-  public async getActiveFleetAndPassengerLocations() {
-    const [driverLocations, passengerLocations] = await Promise.all([
+  public async getActiveFleetAndPassengerLocations(options?: {
+    statusFilter?: string;
+    search?: string;
+    freshness?: string;
+  }) {
+    const { statusFilter = 'ALL', search = '', freshness = 'ALL' } = options || {};
+
+    const [driverLocations, passengerLocations, activeRides, activeSafetyEvents, garageDrivers] = await Promise.all([
       DriverLocation.find({ status: 'LOCATION_ACTIVE' })
-        .populate('driverId', 'name phone')
-        .populate('vehicleId', 'shortVehicleNumber registrationNumber')
+        .populate({
+          path: 'driverId',
+          select: 'name phone role accountStatus driverMode nidNumber',
+        })
+        .populate({
+          path: 'vehicleId',
+          select: 'vehicleId garageCustomId shortVehicleNumber registrationNumber qrIdentifier ownershipType verificationStatus status garageId assignedDriverId modelName',
+          populate: { path: 'garageId', select: 'garageId name phone' },
+        })
         .lean(),
       PassengerLocation.find({ status: 'LOCATION_ACTIVE' })
         .populate('passengerId', 'name phone')
         .lean(),
+      Ride.find({
+        status: { $in: ['ACCEPTED', 'ACTIVE', 'WAITING_PASSENGER_CONFIRM'] },
+      })
+        .populate('passengerId', 'name phone')
+        .populate('driverId', 'name phone')
+        .populate('vehicleId', 'vehicleId shortVehicleNumber')
+        .lean(),
+      SafetyEvent.find({
+        status: { $in: ['ACTIVE', 'ACKNOWLEDGED', 'OPEN'] },
+      }).lean(),
+      GarageDriver.find({ status: 'ACTIVE' }).lean(),
     ]);
 
-    const drivers = driverLocations.map((d: any) => ({
-      id: d._id.toString(),
-      type: 'DRIVER',
-      lat: d.latitude,
-      lng: d.longitude,
-      accuracy: d.accuracy,
-      speed: d.speed,
-      status: d.status,
-      timestamp: d.timestamp,
-      label: d.vehicleId ? `Rickshaw ${d.vehicleId.shortVehicleNumber}` : 'Driver Unit',
-      sublabel: `Driver: ${d.driverId ? d.driverId.name : 'Authorized Driver'}`,
-    }));
+    // Build lookup maps
+    const activeRideByDriverId = new Map<string, any>();
+    const activeRideByVehicleId = new Map<string, any>();
+    activeRides.forEach((ride: any) => {
+      if (ride.driverId?._id) activeRideByDriverId.set(ride.driverId._id.toString(), ride);
+      if (ride.vehicleId?._id) activeRideByVehicleId.set(ride.vehicleId._id.toString(), ride);
+    });
+
+    const emergencyDriverIds = new Set<string>();
+    const emergencyVehicleIds = new Set<string>();
+    activeSafetyEvents.forEach((event: any) => {
+      if (event.driverId) emergencyDriverIds.add(event.driverId.toString());
+      if (event.vehicleId) emergencyVehicleIds.add(event.vehicleId.toString());
+    });
+
+    const activeGarageDriverSet = new Set<string>();
+    garageDrivers.forEach((gd: any) => {
+      if (gd.garageId && gd.driverId) {
+        activeGarageDriverSet.add(`${gd.garageId.toString()}_${gd.driverId.toString()}`);
+      }
+    });
+
+    const now = Date.now();
+
+    const summaryCounts = {
+      totalFleet: driverLocations.length,
+      available: 0,
+      activeRide: 0,
+      idle: 0,
+      stale: 0,
+      emergency: 0,
+      unverified: 0,
+    };
+
+    const drivers = driverLocations.map((d: any) => {
+      const driver = d.driverId as any;
+      const vehicle = d.vehicleId as any;
+      const garage = vehicle?.garageId as any;
+
+      const driverIdStr = driver?._id?.toString();
+      const vehicleIdStr = vehicle?._id?.toString();
+
+      // Freshness calculation
+      const lastTimestamp = d.timestamp ? new Date(d.timestamp).getTime() : 0;
+      const timeDiffMs = now - lastTimestamp;
+      const isFresh = lastTimestamp > 0 && timeDiffMs <= STALE_THRESHOLD_MS;
+      const freshnessState = isFresh ? 'FRESH' : 'STALE';
+
+      // Strict Driver-Vehicle Verification Logic
+      let isDriverVerifiedForVehicle = false;
+      let driverVerificationReason = '';
+
+      if (!driver || !vehicle) {
+        isDriverVerifiedForVehicle = false;
+        driverVerificationReason = 'Driver or vehicle registration missing from location record.';
+      } else if (vehicle.ownershipType === 'SELF_OWNED') {
+        const assignedId = vehicle.assignedDriverId ? vehicle.assignedDriverId.toString() : null;
+        if (assignedId === driverIdStr || driver.driverMode === 'SELF_OWNED') {
+          isDriverVerifiedForVehicle = true;
+          driverVerificationReason = 'Authorized self-owned driver';
+        } else {
+          isDriverVerifiedForVehicle = false;
+          driverVerificationReason = 'Driver is not the registered owner of this self-owned vehicle';
+        }
+      } else if (vehicle.ownershipType === 'GARAGE_REGISTERED') {
+        const assignedId = vehicle.assignedDriverId ? vehicle.assignedDriverId.toString() : null;
+        const garageIdStr = garage?._id?.toString() || (vehicle.garageId ? vehicle.garageId.toString() : null);
+        const hasGarageLink = garageIdStr && driverIdStr && activeGarageDriverSet.has(`${garageIdStr}_${driverIdStr}`);
+
+        if (assignedId === driverIdStr || hasGarageLink) {
+          isDriverVerifiedForVehicle = true;
+          driverVerificationReason = 'Verified garage driver assignment';
+        } else {
+          isDriverVerifiedForVehicle = false;
+          driverVerificationReason = 'Driver unverified for this vehicle: Not assigned or unconfirmed garage driver';
+        }
+      }
+
+      if (!isDriverVerifiedForVehicle) {
+        summaryCounts.unverified++;
+      }
+
+      // Operational state determination
+      const hasEmergency =
+        (driverIdStr && emergencyDriverIds.has(driverIdStr)) ||
+        (vehicleIdStr && emergencyVehicleIds.has(vehicleIdStr));
+      const activeRide =
+        (driverIdStr && activeRideByDriverId.get(driverIdStr)) ||
+        (vehicleIdStr && activeRideByVehicleId.get(vehicleIdStr));
+
+      let operationalState: 'AVAILABLE' | 'ACTIVE_RIDE' | 'IDLE' | 'STALE' | 'EMERGENCY' = 'IDLE';
+
+      if (hasEmergency) {
+        operationalState = 'EMERGENCY';
+        summaryCounts.emergency++;
+      } else if (activeRide) {
+        operationalState = 'ACTIVE_RIDE';
+        summaryCounts.activeRide++;
+      } else if (!isFresh) {
+        operationalState = 'STALE';
+        summaryCounts.stale++;
+      } else if (vehicle?.status === 'AVAILABLE' || d.status === 'LOCATION_ACTIVE') {
+        operationalState = 'AVAILABLE';
+        summaryCounts.available++;
+      } else {
+        operationalState = 'IDLE';
+        summaryCounts.idle++;
+      }
+
+      // Active Ride Summary
+      let activeRideSummary: any = null;
+      if (activeRide) {
+        const pass = activeRide.passengerId as any;
+        activeRideSummary = {
+          rideId: activeRide.rideId,
+          status: activeRide.status,
+          passengerId: pass?._id?.toString(),
+          passengerName: pass?.name || 'Passenger',
+          passengerPhone: pass?.phone || '',
+          passengerPseudonym: activeRide.passengerPseudonym,
+          pickupArea: activeRide.approximatePickupArea,
+          pickupCoordinates: activeRide.pickupLocation?.coordinates || [activeRide.pickupLongitude, activeRide.pickupLatitude],
+          routePoints: activeRide.routePoints || [],
+          distanceMeters: activeRide.distanceMeters || 0,
+          startedAt: activeRide.startedAt || activeRide.acceptedAt || activeRide.requestedAt,
+          isAdminReviewPending: activeRide.isAdminReviewPending || false,
+        };
+      }
+
+      return {
+        id: d._id.toString(),
+        type: 'DRIVER',
+        lat: d.latitude,
+        lng: d.longitude,
+        accuracy: d.accuracy || 0,
+        speed: d.speed || 0,
+        heading: d.heading || 0,
+        status: d.status,
+        timestamp: d.timestamp,
+        locationSource: d.source || 'DEVICE_GPS',
+        isFresh,
+        freshness: freshnessState,
+        lastSeenAgoSeconds: Math.round(timeDiffMs / 1000),
+
+        // Verification & Identity
+        isDriverVerifiedForVehicle,
+        driverVerificationReason,
+
+        // Driver Details
+        driverId: driverIdStr || null,
+        driverName: driver?.name || 'Unknown Driver',
+        driverPhone: driver?.phone || 'N/A',
+        driverMode: driver?.driverMode || vehicle?.ownershipType || 'GARAGE_REGISTERED',
+
+        // Vehicle Details
+        vehicleId: vehicleIdStr || null,
+        vehicleSystemId: vehicle?.vehicleId || 'UNREGISTERED',
+        vehicleCustomId: d.vehicleCustomId || vehicle?.garageCustomId || vehicle?.vehicleId || 'N/A',
+        shortVehicleNumber: vehicle?.shortVehicleNumber || 'D-UNKN',
+        registrationNumber: vehicle?.registrationNumber || 'UNREGISTERED',
+        ownershipType: vehicle?.ownershipType || 'GARAGE_REGISTERED',
+        vehicleStatus: vehicle?.status || 'OFFLINE',
+        vehicleVerificationStatus: vehicle?.verificationStatus || 'PENDING',
+        modelName: vehicle?.modelName || 'Rickshaw Unit',
+
+        // Garage Details
+        garageId: garage?._id?.toString() || null,
+        garageCustomId: garage?.garageId || 'N/A',
+        garageName: garage?.name || (vehicle?.ownershipType === 'SELF_OWNED' ? 'Self-Owned' : 'N/A'),
+
+        // Command Center Operational State
+        operationalState,
+        activeRideSummary,
+
+        label: vehicle ? `Rickshaw ${vehicle.shortVehicleNumber}` : 'Driver Unit',
+        sublabel: `Driver: ${driver ? driver.name : 'Authorized Driver'} | ${operationalState}`,
+      };
+    });
+
+    // Operational filtering
+    let filteredDrivers = drivers;
+
+    if (statusFilter && statusFilter !== 'ALL') {
+      filteredDrivers = filteredDrivers.filter((d) => d.operationalState === statusFilter);
+    }
+
+    if (freshness && freshness !== 'ALL') {
+      filteredDrivers = filteredDrivers.filter((d) => d.freshness === freshness);
+    }
+
+    if (search && search.trim() !== '') {
+      const q = search.trim().toLowerCase();
+      filteredDrivers = filteredDrivers.filter(
+        (d) =>
+          d.vehicleSystemId.toLowerCase().includes(q) ||
+          d.shortVehicleNumber.toLowerCase().includes(q) ||
+          d.registrationNumber.toLowerCase().includes(q) ||
+          d.driverName.toLowerCase().includes(q) ||
+          d.driverPhone.toLowerCase().includes(q) ||
+          d.garageCustomId.toLowerCase().includes(q) ||
+          d.garageName.toLowerCase().includes(q) ||
+          (d.activeRideSummary && d.activeRideSummary.rideId.toLowerCase().includes(q))
+      );
+    }
 
     const passengers = passengerLocations.map((p: any) => ({
       id: p._id.toString(),
@@ -181,9 +400,10 @@ export class PassengerLocationService {
 
     return {
       success: true,
-      drivers,
+      summary: summaryCounts,
+      drivers: filteredDrivers,
       passengers,
-      totalActive: drivers.length + passengers.length,
+      totalActive: filteredDrivers.length + passengers.length,
     };
   }
 

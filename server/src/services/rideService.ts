@@ -151,15 +151,16 @@ export class RideService {
     };
 
     const newDistance = Math.round((ride.distanceMeters || 0) + distMeters);
-    ride.routePoints.push(newPoint);
-    ride.routePointCount = ride.routePoints.length;
+    routePoints.push(newPoint);
+    ride.routePoints = routePoints;
+    ride.routePointCount = routePoints.length;
     ride.distanceMeters = newDistance;
     await ride.save();
 
     return {
       persisted: true,
       reason: isSignificantTurn ? 'Significant turn detected' : isSignificantMove ? 'Significant movement detected' : 'Time threshold met',
-      routePointCount: ride.routePoints.length,
+      routePointCount: routePoints.length,
       distanceMeters: newDistance,
       addedDistanceMeters: Math.round(distMeters),
     };

@@ -698,34 +698,44 @@ export const DriverDashboardView: React.FC = () => {
 
           {/* Real Interactive Leaflet Geographic Map */}
           <View style={{ marginTop: spacing.xs }}>
-            <RealMapContainer
-              latitude={currentLoc?.latitude ?? 23.8103}
-              longitude={currentLoc?.longitude ?? 90.4125}
-              accuracy={currentLoc?.accuracy}
-              status={sharingStatus}
-              title="Real Interactive Device GPS Map"
-              subtitle={
-                isSharing
-                  ? `Live Telemetry via ${currentLoc?.source || 'DEVICE_GPS'} • Synchronized`
-                  : 'Location Sharing Inactive — Tap "Start Live Location Sharing" to stream live GPS'
-              }
-              height={360}
-              passengerMarkers={
-                activeRide?.passengerLocation && (activeRide.status === 'ACTIVE' || activeRide.status === 'WAITING_PASSENGER_CONFIRM')
-                  ? [
-                      {
-                        id: 'active-passenger-loc',
-                        type: 'PASSENGER' as const,
-                        lat: activeRide.passengerLocation.latitude,
-                        lng: activeRide.passengerLocation.longitude,
-                        accuracy: activeRide.passengerLocation.accuracy,
-                        label: activeRide.passengerPseudonym || 'Passenger Unit',
-                        sublabel: `Live Passenger • Trip [${activeRide.rideId}]`,
-                      },
-                    ]
-                  : []
-              }
-            />
+            {(() => {
+              const activeRoutePolyline =
+                activeRide?.routePoints && activeRide.routePoints.length > 1
+                  ? activeRide.routePoints.map((pt) => [pt.coordinates[1], pt.coordinates[0]] as [number, number])
+                  : undefined;
+
+              return (
+                <RealMapContainer
+                  latitude={currentLoc?.latitude ?? 23.8103}
+                  longitude={currentLoc?.longitude ?? 90.4125}
+                  accuracy={currentLoc?.accuracy}
+                  status={sharingStatus}
+                  title="Real Interactive Device GPS Map"
+                  subtitle={
+                    isSharing
+                      ? `Live Telemetry via ${currentLoc?.source || 'DEVICE_GPS'} • Synchronized`
+                      : 'Location Sharing Inactive — Tap "Start Live Location Sharing" to stream live GPS'
+                  }
+                  height={360}
+                  routePolyline={activeRoutePolyline}
+                  passengerMarkers={
+                    activeRide?.passengerLocation && (activeRide.status === 'ACTIVE' || activeRide.status === 'WAITING_PASSENGER_CONFIRM')
+                      ? [
+                          {
+                            id: 'active-passenger-loc',
+                            type: 'PASSENGER' as const,
+                            lat: activeRide.passengerLocation.latitude,
+                            lng: activeRide.passengerLocation.longitude,
+                            accuracy: activeRide.passengerLocation.accuracy,
+                            label: activeRide.passengerPseudonym || 'Passenger Unit',
+                            sublabel: `Live Passenger • Trip [${activeRide.rideId}]`,
+                          },
+                        ]
+                      : []
+                  }
+                />
+              );
+            })()}
           </View>
 
           {/* Dev Location Simulator Panel */}
@@ -860,6 +870,14 @@ export const DriverDashboardView: React.FC = () => {
                     <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Destination</Text>
                     <Text style={[styles.telemetryVal, { color: colors.textSecondary }]}>{activeRide.destinationText || 'Open'}</Text>
                   </View>
+                  {activeRide.distanceMeters !== undefined && (
+                    <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                      <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Distance Traveled</Text>
+                      <Text style={[styles.telemetryVal, { color: colors.primary }]}>
+                        {(activeRide.distanceMeters / 1000).toFixed(2)} km ({activeRide.routePointCount || activeRide.routePoints?.length || 0} GPS pts)
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
                 {activeRide.status === 'ACCEPTED' && (

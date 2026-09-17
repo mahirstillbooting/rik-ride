@@ -59,6 +59,15 @@ export interface RideData {
   lastValidatedSpeed?: number;
   acceptanceDeadline?: string;
   remainingSeconds?: number;
+  routePoints?: Array<{
+    coordinates: [number, number]; // [lng, lat]
+    timestamp: string;
+    accuracy?: number;
+    speed?: number;
+    heading?: number;
+  }>;
+  distanceMeters?: number;
+  routePointCount?: number;
 }
 
 class ClientRideService {

@@ -34,6 +34,7 @@ export interface RealMapContainerProps {
   rickshawMarkers?: NearbyRickshaw[];
   isPassengerView?: boolean;
   onTargetedRequest?: (rickshaw: NearbyRickshaw) => void;
+  routePolyline?: Array<[number, number]>;
 }
 
 export const RealMapContainer: React.FC<RealMapContainerProps> = ({
@@ -50,6 +51,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   rickshawMarkers = [],
   isPassengerView = false,
   onTargetedRequest,
+  routePolyline,
 }) => {
   const { colors, mode } = useTheme();
 
@@ -77,6 +79,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   const accuracyCircleRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
   const rickshawLayerGroupRef = useRef<any>(null);
+  const polylineRef = useRef<any>(null);
 
   const [isUserPanning, setIsUserPanning] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -93,6 +96,7 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
   const modalAccuracyCircleRef = useRef<any>(null);
   const modalTileLayerRef = useRef<any>(null);
   const modalRickshawLayerGroupRef = useRef<any>(null);
+  const modalPolylineRef = useRef<any>(null);
 
   // Acquire Browser Geolocation if no props provided
   useEffect(() => {
@@ -430,9 +434,41 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         tileLayerRef.current = null;
         accuracyCircleRef.current = null;
         rickshawLayerGroupRef.current = null;
+        if (polylineRef.current) {
+          polylineRef.current.remove();
+          polylineRef.current = null;
+        }
       }
     };
   }, []);
+
+  // Update embedded route polyline when routePolyline prop changes
+  useEffect(() => {
+    if (!mapInstanceRef.current || Platform.OS !== 'web') return;
+    let L: any;
+    try {
+      L = require('leaflet');
+    } catch {
+      return;
+    }
+
+    if (routePolyline && routePolyline.length > 1) {
+      if (polylineRef.current) {
+        polylineRef.current.setLatLngs(routePolyline);
+      } else {
+        polylineRef.current = L.polyline(routePolyline, {
+          color: '#D97706',
+          weight: 5,
+          opacity: 0.85,
+          lineJoin: 'round',
+          lineCap: 'round',
+        }).addTo(mapInstanceRef.current);
+      }
+    } else if (polylineRef.current) {
+      polylineRef.current.remove();
+      polylineRef.current = null;
+    }
+  }, [routePolyline]);
 
   // Update embedded rickshaw markers when prop changes
   useEffect(() => {
@@ -586,9 +622,41 @@ export const RealMapContainer: React.FC<RealMapContainerProps> = ({
         modalTileLayerRef.current = null;
         modalAccuracyCircleRef.current = null;
         modalRickshawLayerGroupRef.current = null;
+        if (modalPolylineRef.current) {
+          modalPolylineRef.current.remove();
+          modalPolylineRef.current = null;
+        }
       }
     };
   }, [isModalOpen]);
+
+  // Update modal route polyline when routePolyline prop changes
+  useEffect(() => {
+    if (!modalMapInstanceRef.current || Platform.OS !== 'web' || !isModalOpen) return;
+    let L: any;
+    try {
+      L = require('leaflet');
+    } catch {
+      return;
+    }
+
+    if (routePolyline && routePolyline.length > 1) {
+      if (modalPolylineRef.current) {
+        modalPolylineRef.current.setLatLngs(routePolyline);
+      } else {
+        modalPolylineRef.current = L.polyline(routePolyline, {
+          color: '#D97706',
+          weight: 5,
+          opacity: 0.85,
+          lineJoin: 'round',
+          lineCap: 'round',
+        }).addTo(modalMapInstanceRef.current);
+      }
+    } else if (modalPolylineRef.current) {
+      modalPolylineRef.current.remove();
+      modalPolylineRef.current = null;
+    }
+  }, [routePolyline, isModalOpen]);
 
   // Update modal rickshaw markers when prop changes
   useEffect(() => {

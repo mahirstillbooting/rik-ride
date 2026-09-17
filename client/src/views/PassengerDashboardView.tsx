@@ -536,6 +536,11 @@ export const PassengerDashboardView: React.FC = () => {
               ? [activeDriverMarker, ...nearbyRickshaws.filter((r) => r.vehicleId !== (activeRide?.vehicleId as any)?._id)]
               : nearbyRickshaws;
 
+            const activeRoutePolyline =
+              activeRide?.routePoints && activeRide.routePoints.length > 1
+                ? activeRide.routePoints.map((pt) => [pt.coordinates[1], pt.coordinates[0]] as [number, number])
+                : undefined;
+
             return (
               <RealMapContainer
                 latitude={currentLoc?.latitude ?? 23.8103}
@@ -553,6 +558,7 @@ export const PassengerDashboardView: React.FC = () => {
                 height={420}
                 allowExpand={true}
                 rickshawMarkers={mapRickshawMarkers}
+                routePolyline={activeRoutePolyline}
                 isPassengerView={true}
                 onTargetedRequest={handleTargetedRideRequest}
               />
@@ -773,6 +779,15 @@ export const PassengerDashboardView: React.FC = () => {
                   {activeRide.destinationText || 'Open Destination'}
                 </Text>
               </View>
+
+              {activeRide.distanceMeters !== undefined && (
+                <View style={[styles.telemetryCard, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                  <Text style={[styles.telemetryLabel, { color: colors.textMuted }]}>Distance Traveled</Text>
+                  <Text style={[styles.telemetryVal, { color: colors.primary }]}>
+                    {(activeRide.distanceMeters / 1000).toFixed(2)} km ({activeRide.routePointCount || activeRide.routePoints?.length || 0} GPS pts)
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Pre-Active Cancel Request Action */}

@@ -32,6 +32,8 @@ import {
   AuditLogItem,
   AdminFleetSummary,
   AdminFleetDriverLocation,
+  GarageFleetItem,
+  VehicleDetailRecord,
 } from '../services/adminService';
 import { clientRideService, RideData, HistoricalTripSummary, DetailedTripRecord } from '../services/rideService';
 import { clientSafetyService, SafetyEventData } from '../services/safetyService';
@@ -81,8 +83,26 @@ export const AdminDashboardView: React.FC = () => {
   const [fleetStatusFilter, setFleetStatusFilter] = useState<string>('ALL');
   const [fleetSearchText, setFleetSearchText] = useState<string>('');
   const [selectedFleetVehicle, setSelectedFleetVehicle] = useState<AdminFleetDriverLocation | null>(null);
-  const [adminFleetMode, setAdminFleetMode] = useState<'ALL' | 'GARAGE' | 'SELF_OWNED'>('ALL');
-  const [selectedGarageFilterId, setSelectedGarageFilterId] = useState<string>('ALL');
+
+  // Admin Fleet Hierarchy & Server-Side Pagination States
+  const [fleetCategory, setFleetCategory] = useState<'GARAGE' | 'SELF_OWNED'>('GARAGE');
+  const [garageSearchText, setGarageSearchText] = useState('');
+  const [garagePage, setGaragePage] = useState(1);
+  const [garageTotalPages, setGarageTotalPages] = useState(1);
+  const [garagesData, setGaragesData] = useState<GarageFleetItem[]>([]);
+  const [loadingGarages, setLoadingGarages] = useState(false);
+  const [selectedGarage, setSelectedGarage] = useState<GarageFleetItem | null>(null);
+
+  const [vehicleSearchText, setVehicleSearchText] = useState('');
+  const [vehiclePage, setVehiclePage] = useState(1);
+  const [vehicleTotalPages, setVehicleTotalPages] = useState(1);
+  const [vehiclesData, setVehiclesData] = useState<VehicleDetailRecord[]>([]);
+  const [loadingVehicles, setLoadingVehicles] = useState(false);
+
+  // Vehicle Detail Panel States
+  const [selectedVehicleDetail, setSelectedVehicleDetail] = useState<VehicleDetailRecord | null>(null);
+  const [loadingVehicleDetail, setLoadingVehicleDetail] = useState(false);
+  const [showVehicleDetailModal, setShowVehicleDetailModal] = useState(false);
 
   // Filtering states
   const [pendingTypeFilter, setPendingTypeFilter] = useState<'ALL' | 'GARAGE' | 'USER' | 'VEHICLE'>('ALL');
@@ -269,6 +289,62 @@ export const AdminDashboardView: React.FC = () => {
       setErrorMsg(err.message || 'Failed to fetch admin data from server.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchGaragesPaginated = useCallback(async () => {
+    setLoadingGarages(true);
+    try {
+      const res = await adminService.getGaragesPaginated({
+        search: garageSearchText.trim() || undefined,
+        page: garagePage,
+        limit: 8,
+      });
+      if (res.success) {
+        setGaragesData(res.garages);
+        setGarageTotalPages(res.pagination.pages || 1);
+      }
+    } catch (e: any) {
+      console.warn('Fetch garages error:', e);
+    } finally {
+      setLoadingGarages(false);
+    }
+  }, [garageSearchText, garagePage]);
+
+  const fetchVehiclesPaginated = useCallback(async () => {
+    setLoadingVehicles(true);
+    try {
+      const ownershipType = fleetCategory === 'SELF_OWNED' ? 'SELF_OWNED' : 'GARAGE_OWNED';
+      const garageId = fleetCategory === 'GARAGE' && selectedGarage ? selectedGarage._id : undefined;
+
+      const res = await adminService.getVehiclesPaginated({
+        ownershipType,
+        garageId,
+        search: vehicleSearchText.trim() || undefined,
+        page: vehiclePage,
+        limit: 8,
+      });
+      if (res.success) {
+        setVehiclesData(res.vehicles);
+        setVehicleTotalPages(res.pagination.pages || 1);
+      }
+    } catch (e: any) {
+      console.warn('Fetch vehicles error:', e);
+    } finally {
+      setLoadingVehicles(false);
+    }
+  }, [fleetCategory, selectedGarage, vehicleSearchText, vehiclePage]);
+
+  const handleOpenVehicleDetail = async (vehicleId: string) => {
+    setLoadingVehicleDetail(true);
+    setShowVehicleDetailModal(true);
+    try {
+      const detail = await adminService.getVehicleDetail(vehicleId);
+      setSelectedVehicleDetail(detail);
+    } catch (e: any) {
+      showToast(e.message || 'Failed to load vehicle detail', 'danger');
+    } finally {
+      setLoadingVehicleDetail(false);
     }
   };
 
@@ -1093,140 +1169,434 @@ export const AdminDashboardView: React.FC = () => {
               </View>
             )}
 
-            {/* TAB 6: RICKSHAWS / VEHICLES */}
+            {/* TAB 6: RICKSHAWS / VEHICLES (ADMIN FLEET HIERARCHY) */}
             {currentNavItem.id === 'admin-vehicles' && (
               <View style={styles.viewSection}>
-                {/* Fleet Hierarchy Mode Selector */}
+                {/* Primary Fleet Category Selector */}
                 <View style={styles.filterRow}>
-                  {(['ALL', 'GARAGE', 'SELF_OWNED'] as const).map((mode) => (
-                    <TouchableOpacity
-                      key={mode}
-                      style={[
-                        styles.filterChip,
-                        {
-                          backgroundColor: adminFleetMode === mode ? colors.primary : colors.surfaceElevated,
-                          borderColor: adminFleetMode === mode ? colors.primary : colors.border,
-                        },
-                      ]}
-                      onPress={() => {
-                        setAdminFleetMode(mode);
-                        setSelectedGarageFilterId('ALL');
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.filterChipText,
-                          { color: adminFleetMode === mode ? colors.primaryForeground : colors.textPrimary },
-                        ]}
-                      >
-                        {mode === 'ALL'
-                          ? 'All Platform Rickshaws'
-                          : mode === 'GARAGE'
-                          ? 'Garages Hierarchy (Garage Rickshaws)'
-                          : 'Self-Owned Drivers Fleet'}
+                  <TouchableOpacity
+                    style={[
+                      styles.filterChip,
+                      {
+                        backgroundColor: fleetCategory === 'GARAGE' ? colors.primary : colors.surfaceElevated,
+                        borderColor: fleetCategory === 'GARAGE' ? colors.primary : colors.border,
+                      },
+                    ]}
+                    onPress={() => {
+                      setFleetCategory('GARAGE');
+                      setSelectedGarage(null);
+                      setGaragePage(1);
+                      setVehiclePage(1);
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Icon name="briefcase" size={14} color={fleetCategory === 'GARAGE' ? colors.primaryForeground : colors.textPrimary} />
+                      <Text style={[styles.filterChipText, { color: fleetCategory === 'GARAGE' ? colors.primaryForeground : colors.textPrimary }]}>
+                        GARAGE FLEET (GARAGES HIERARCHY)
                       </Text>
-                    </TouchableOpacity>
-                  ))}
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.filterChip,
+                      {
+                        backgroundColor: fleetCategory === 'SELF_OWNED' ? colors.primary : colors.surfaceElevated,
+                        borderColor: fleetCategory === 'SELF_OWNED' ? colors.primary : colors.border,
+                      },
+                    ]}
+                    onPress={() => {
+                      setFleetCategory('SELF_OWNED');
+                      setSelectedGarage(null);
+                      setVehiclePage(1);
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Icon name="truck" size={14} color={fleetCategory === 'SELF_OWNED' ? colors.primaryForeground : colors.textPrimary} />
+                      <Text style={[styles.filterChipText, { color: fleetCategory === 'SELF_OWNED' ? colors.primaryForeground : colors.textPrimary }]}>
+                        SELF-OWNED FLEET (INDEPENDENT DRIVERS)
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
                 </View>
 
-                {/* Specific Garage Selector (When Garage Mode is Active) */}
-                {adminFleetMode === 'GARAGE' && garagesList.length > 0 && (
-                  <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textSecondary }}>Filter Garage Hub:</Text>
-                    <TouchableOpacity
-                      style={[
-                        styles.filterChip,
-                        {
-                          backgroundColor: selectedGarageFilterId === 'ALL' ? colors.primarySurface : colors.surface,
-                          borderColor: selectedGarageFilterId === 'ALL' ? colors.primaryBorder : colors.border,
-                        },
-                      ]}
-                      onPress={() => setSelectedGarageFilterId('ALL')}
-                    >
-                      <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '700' }}>All Registered Garages</Text>
-                    </TouchableOpacity>
+                {/* CATEGORY A: GARAGE FLEET HIERARCHY */}
+                {fleetCategory === 'GARAGE' && (
+                  <>
+                    {!selectedGarage ? (
+                      /* STEP 1: GARAGE SELECTION DIRECTORY */
+                      <Card variant="hero" style={styles.fullWidthCard}>
+                        <CardHeader
+                          title="Garage Directory & Hub Selection"
+                          subtitle="Select a registered Garage Hub to inspect its assigned electric rickshaws"
+                          icon={<Icon name="briefcase" size={18} color={colors.primary} />}
+                        />
+                        <CardBody style={{ gap: spacing.md }}>
+                          {/* Search Bar for Garages */}
+                          <Input
+                            placeholder="Search Garage Name, Garage ID (e.g. DH-GAR-0001), Address, Phone..."
+                            value={garageSearchText}
+                            onChangeText={(txt) => {
+                              setGarageSearchText(txt);
+                              setGaragePage(1);
+                            }}
+                            leftIcon={<Icon name="search" size={16} color={colors.textMuted} />}
+                            rightIcon={garageSearchText ? <TouchableOpacity onPress={() => setGarageSearchText('')}><Icon name="x" size={14} color={colors.textMuted} /></TouchableOpacity> : undefined}
+                          />
 
-                    {garagesList.map((g) => (
-                      <TouchableOpacity
-                        key={g._id}
-                        style={[
-                          styles.filterChip,
-                          {
-                            backgroundColor: selectedGarageFilterId === g._id ? colors.primarySurface : colors.surface,
-                            borderColor: selectedGarageFilterId === g._id ? colors.primaryBorder : colors.border,
-                          },
-                        ]}
-                        onPress={() => setSelectedGarageFilterId(g._id)}
-                      >
-                        <Text style={{ fontSize: 12, color: colors.textPrimary, fontWeight: '600' }}>
-                          {g.name} ({g.customId || 'Garage'})
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
+                          {loadingGarages ? (
+                            <LoadingState message="Loading registered garage directory & metrics..." />
+                          ) : garagesData.length === 0 ? (
+                            <EmptyState
+                              title="No Garages Available"
+                              description="No registered garage hubs match your current search query."
+                            />
+                          ) : (
+                            garagesData.map((g) => (
+                              <View
+                                key={g._id}
+                                style={[styles.itemCardBody, { padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+                              >
+                                <View style={styles.itemHeader}>
+                                  <View style={styles.itemTitleCol}>
+                                    <View style={styles.badgeTitleRow}>
+                                      <Badge label={`ID: ${g.garageId || 'DH-GAR-0001'}`} variant="info" />
+                                      {renderStatusBadge(g.verificationStatus)}
+                                    </View>
+                                    <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>{g.name}</Text>
+                                    <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+                                      Owner: {g.ownerId?.name || 'Unassigned'} ({g.ownerId?.phone || g.phone}) | Address: {g.address}
+                                    </Text>
+                                  </View>
+                                </View>
 
-                {vehiclesList.length === 0 ? (
-                  <EmptyState
-                    title="No Registered Vehicles"
-                    description="No rickshaws or fleet vehicles registered in the database."
-                  />
-                ) : (
-                  vehiclesList
-                    .filter((v) => {
-                      if (adminFleetMode === 'GARAGE') {
-                        if (v.ownershipType !== 'GARAGE_OWNED') return false;
-                        if (selectedGarageFilterId !== 'ALL' && v.garageId?._id !== selectedGarageFilterId && v.garageId !== selectedGarageFilterId) return false;
-                        return true;
-                      }
-                      if (adminFleetMode === 'SELF_OWNED') {
-                        return v.ownershipType === 'SELF_OWNED';
-                      }
-                      return true;
-                    })
-                    .map((v) => (
-                      <Card key={v._id} variant="default" style={styles.itemCard}>
-                        <CardBody style={styles.itemCardBody}>
-                          <View style={styles.itemHeader}>
-                            <View style={styles.itemTitleCol}>
-                              <View style={styles.badgeTitleRow}>
-                                <Badge label={`SHORT ID: ${v.shortVehicleNumber || 'N/A'}`} variant="info" />
-                                <Badge
-                                  label={v.ownershipType === 'GARAGE_OWNED' ? `GARAGE: ${v.garageId?.name || 'Garage'}` : 'SELF-OWNED DRIVER'}
-                                  variant={v.ownershipType === 'GARAGE_OWNED' ? 'neutral' : 'info'}
-                                />
-                                {renderStatusBadge(v.verificationStatus)}
+                                {/* Garage Operational Metrics Bar */}
+                                <View style={styles.fleetSummaryBar}>
+                                  <View style={[styles.summaryPill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                                    <Text style={[styles.summaryPillVal, { color: colors.textPrimary }]}>{g.metrics?.totalVehicles || 0}</Text>
+                                    <Text style={[styles.summaryPillLabel, { color: colors.textMuted }]}>Registered Fleet</Text>
+                                  </View>
+
+                                  <View style={[styles.summaryPill, { backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.3)' }]}>
+                                    <Text style={[styles.summaryPillVal, { color: '#10B981' }]}>{g.metrics?.operationalVehicles || 0}</Text>
+                                    <Text style={[styles.summaryPillLabel, { color: '#10B981' }]}>Operational</Text>
+                                  </View>
+
+                                  <View style={[styles.summaryPill, { backgroundColor: 'rgba(217, 119, 6, 0.1)', borderColor: 'rgba(217, 119, 6, 0.3)' }]}>
+                                    <Text style={[styles.summaryPillVal, { color: '#D97706' }]}>{g.metrics?.activeRidesCount || 0}</Text>
+                                    <Text style={[styles.summaryPillLabel, { color: '#D97706' }]}>Active Rides</Text>
+                                  </View>
+                                </View>
+
+                                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 4 }}>
+                                  <Button
+                                    title="Inspect Garage Rickshaws →"
+                                    variant="primary"
+                                    size="sm"
+                                    icon={<Icon name="truck" size={14} color="#FFFFFF" />}
+                                    onPress={() => {
+                                      setSelectedGarage(g);
+                                      setVehiclePage(1);
+                                      setVehicleSearchText('');
+                                    }}
+                                  />
+                                </View>
                               </View>
-                              <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>
-                                Vehicle {v.shortVehicleNumber || v.registrationNumber}
-                              </Text>
-                              <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
-                                Full Reg #: {v.registrationNumber} | Assigned Driver: {v.assignedDriverId?.name || 'Unassigned'} | Mode: {v.ownershipType}
-                              </Text>
-                            </View>
-                          </View>
+                            ))
+                          )}
 
-                          <View style={styles.actionRow}>
-                            {v.verificationStatus !== 'APPROVED' && (
+                          {/* Server-Side Pagination Controls for Garages */}
+                          {garageTotalPages > 1 && (
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs }}>
                               <Button
-                                title="Approve Vehicle"
-                                variant="primary"
+                                title="← Previous"
+                                variant="outline"
                                 size="sm"
-                                onPress={() => handleApprovalAction('VEHICLE', v._id, 'APPROVE')}
+                                disabled={garagePage <= 1}
+                                onPress={() => setGaragePage((p) => Math.max(1, p - 1))}
                               />
-                            )}
-                            {v.verificationStatus !== 'SUSPENDED' && (
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textSecondary }}>
+                                Page {garagePage} of {garageTotalPages}
+                              </Text>
                               <Button
-                                title="Suspend Vehicle"
-                                variant="danger"
+                                title="Next →"
+                                variant="outline"
                                 size="sm"
-                                onPress={() => handleApprovalAction('VEHICLE', v._id, 'SUSPEND')}
+                                disabled={garagePage >= garageTotalPages}
+                                onPress={() => setGaragePage((p) => Math.min(garageTotalPages, p + 1))}
                               />
-                            )}
-                          </View>
+                            </View>
+                          )}
                         </CardBody>
                       </Card>
-                    ))
+                    ) : (
+                      /* STEP 2: SELECTED GARAGE RICKSHAWS LIST */
+                      <Card variant="hero" style={styles.fullWidthCard}>
+                        <CardHeader
+                          title={`Garage Hub: ${selectedGarage.name}`}
+                          subtitle={`ID: ${selectedGarage.garageId || 'DH-GAR-0001'} | Address: ${selectedGarage.address} | Owner: ${selectedGarage.ownerId?.name || 'N/A'}`}
+                          icon={<Icon name="briefcase" size={18} color={colors.primary} />}
+                          action={
+                            <Button
+                              title="← Back to Garages Directory"
+                              variant="outline"
+                              size="sm"
+                              onPress={() => setSelectedGarage(null)}
+                            />
+                          }
+                        />
+                        <CardBody style={{ gap: spacing.md }}>
+                          <Input
+                            placeholder="Search Short Vehicle #, Registration #, or Driver Name in this Garage..."
+                            value={vehicleSearchText}
+                            onChangeText={(txt) => {
+                              setVehicleSearchText(txt);
+                              setVehiclePage(1);
+                            }}
+                            leftIcon={<Icon name="search" size={16} color={colors.textMuted} />}
+                            rightIcon={vehicleSearchText ? <TouchableOpacity onPress={() => setVehicleSearchText('')}><Icon name="x" size={14} color={colors.textMuted} /></TouchableOpacity> : undefined}
+                          />
+
+                          {loadingVehicles ? (
+                            <LoadingState message="Fetching rickshaws for selected garage..." />
+                          ) : vehiclesData.length === 0 ? (
+                            <EmptyState
+                              title="No Rickshaws Registered With This Garage"
+                              description="No registered vehicle records were found for this garage hub matching your filter."
+                            />
+                          ) : (
+                            vehiclesData.map((v) => (
+                              <Card key={v._id} variant="default" style={styles.itemCard}>
+                                <CardBody style={styles.itemCardBody}>
+                                  <View style={styles.itemHeader}>
+                                    <View style={styles.itemTitleCol}>
+                                      <View style={styles.badgeTitleRow}>
+                                        <Badge label={`SHORT ID: ${v.shortVehicleNumber}`} variant="info" />
+                                        <Badge label={`GARAGE: ${selectedGarage.name}`} variant="neutral" />
+                                        {renderStatusBadge(v.verificationStatus)}
+                                        <Badge
+                                          label={v.isDriverVerifiedForVehicle ? '✓ VERIFIED DRIVER' : '⚠️ UNVERIFIED'}
+                                          variant={v.isDriverVerifiedForVehicle ? 'success' : 'warning'}
+                                        />
+                                      </View>
+
+                                      <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>
+                                        Rickshaw {v.shortVehicleNumber} ({v.registrationNumber})
+                                      </Text>
+
+                                      <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+                                        Assigned Driver: <strong>{v.assignedDriverId?.name || 'Unassigned'}</strong> ({v.assignedDriverId?.phone || 'N/A'}) • Model: {v.modelName || 'Electric Rickshaw'}
+                                      </Text>
+
+                                      {!v.isDriverVerifiedForVehicle && (
+                                        <Text style={{ fontSize: 11, color: '#F59E0B', fontWeight: '700', marginTop: 2 }}>
+                                          ⚠️ {v.driverVerificationReason}
+                                        </Text>
+                                      )}
+                                    </View>
+                                  </View>
+
+                                  {/* Semantic Action Controls Bar */}
+                                  <View style={styles.actionRow}>
+                                    <Button
+                                      title="Inspect Details"
+                                      variant="primary"
+                                      size="sm"
+                                      icon={<Icon name="info" size={14} color="#FFFFFF" />}
+                                      onPress={() => handleOpenVehicleDetail(v._id)}
+                                    />
+
+                                    {v.location && (
+                                      <Button
+                                        title="Focus Map"
+                                        variant="outline"
+                                        size="sm"
+                                        icon={<Icon name="map-pin" size={14} color={colors.primary} />}
+                                        onPress={() => setFocusedCoords({ lat: v.location!.latitude, lng: v.location!.longitude })}
+                                      />
+                                    )}
+
+                                    {v.verificationStatus !== 'APPROVED' && (
+                                      <Button
+                                        title="Approve"
+                                        variant="success"
+                                        size="sm"
+                                        icon={<Icon name="check" size={14} color="#FFFFFF" />}
+                                        onPress={() => handleApprovalAction('VEHICLE', v._id, 'APPROVE')}
+                                      />
+                                    )}
+
+                                    {v.verificationStatus !== 'SUSPENDED' && (
+                                      <Button
+                                        title="Suspend"
+                                        variant="danger"
+                                        size="sm"
+                                        icon={<Icon name="trash-2" size={14} color="#FFFFFF" />}
+                                        onPress={() => handleApprovalAction('VEHICLE', v._id, 'SUSPEND')}
+                                      />
+                                    )}
+                                  </View>
+                                </CardBody>
+                              </Card>
+                            ))
+                          )}
+
+                          {/* Server-Side Pagination Controls for Garage Rickshaws */}
+                          {vehicleTotalPages > 1 && (
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs }}>
+                              <Button
+                                title="← Previous"
+                                variant="outline"
+                                size="sm"
+                                disabled={vehiclePage <= 1}
+                                onPress={() => setVehiclePage((p) => Math.max(1, p - 1))}
+                              />
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textSecondary }}>
+                                Page {vehiclePage} of {vehicleTotalPages}
+                              </Text>
+                              <Button
+                                title="Next →"
+                                variant="outline"
+                                size="sm"
+                                disabled={vehiclePage >= vehicleTotalPages}
+                                onPress={() => setVehiclePage((p) => Math.min(vehicleTotalPages, p + 1))}
+                              />
+                            </View>
+                          )}
+                        </CardBody>
+                      </Card>
+                    )}
+                  </>
+                )}
+
+                {/* CATEGORY B: SELF-OWNED FLEET */}
+                {fleetCategory === 'SELF_OWNED' && (
+                  <Card variant="hero" style={styles.fullWidthCard}>
+                    <CardHeader
+                      title="Self-Owned Drivers Fleet Directory"
+                      subtitle="Rickshaws independently owned and operated by self-owned drivers"
+                      icon={<Icon name="truck" size={18} color={colors.primary} />}
+                    />
+                    <CardBody style={{ gap: spacing.md }}>
+                      <Input
+                        placeholder="Search Short Vehicle #, Reg #, Driver Name, or Phone..."
+                        value={vehicleSearchText}
+                        onChangeText={(txt) => {
+                          setVehicleSearchText(txt);
+                          setVehiclePage(1);
+                        }}
+                        leftIcon={<Icon name="search" size={16} color={colors.textMuted} />}
+                        rightIcon={vehicleSearchText ? <TouchableOpacity onPress={() => setVehicleSearchText('')}><Icon name="x" size={14} color={colors.textMuted} /></TouchableOpacity> : undefined}
+                      />
+
+                      {loadingVehicles ? (
+                        <LoadingState message="Fetching self-owned driver vehicles..." />
+                      ) : vehiclesData.length === 0 ? (
+                        <EmptyState
+                          title="No Self-Owned Rickshaws Available"
+                          description="No self-owned vehicle registrations match your search criteria."
+                        />
+                      ) : (
+                        vehiclesData.map((v) => (
+                          <Card key={v._id} variant="default" style={styles.itemCard}>
+                            <CardBody style={styles.itemCardBody}>
+                              <View style={styles.itemHeader}>
+                                <View style={styles.itemTitleCol}>
+                                  <View style={styles.badgeTitleRow}>
+                                    <Badge label={`SHORT ID: ${v.shortVehicleNumber}`} variant="info" />
+                                    <Badge label="SELF-OWNED DRIVER" variant="info" />
+                                    {renderStatusBadge(v.verificationStatus)}
+                                    <Badge
+                                      label={v.isDriverVerifiedForVehicle ? '✓ VERIFIED OWNER' : '⚠️ UNVERIFIED'}
+                                      variant={v.isDriverVerifiedForVehicle ? 'success' : 'warning'}
+                                    />
+                                  </View>
+
+                                  <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>
+                                    Rickshaw {v.shortVehicleNumber} ({v.registrationNumber})
+                                  </Text>
+
+                                  <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>
+                                    Self-Owned Driver: <strong>{v.assignedDriverId?.name || 'Unassigned'}</strong> ({v.assignedDriverId?.phone || 'N/A'}) • Model: {v.modelName || 'Electric Rickshaw'}
+                                  </Text>
+
+                                  {!v.isDriverVerifiedForVehicle && (
+                                    <Text style={{ fontSize: 11, color: '#F59E0B', fontWeight: '700', marginTop: 2 }}>
+                                      ⚠️ {v.driverVerificationReason}
+                                    </Text>
+                                  )}
+                                </View>
+                              </View>
+
+                              {/* Semantic Action Controls Bar */}
+                              <View style={styles.actionRow}>
+                                <Button
+                                  title="Inspect Details"
+                                  variant="primary"
+                                  size="sm"
+                                  icon={<Icon name="info" size={14} color="#FFFFFF" />}
+                                  onPress={() => handleOpenVehicleDetail(v._id)}
+                                />
+
+                                {v.location && (
+                                  <Button
+                                    title="Focus Map"
+                                    variant="outline"
+                                    size="sm"
+                                    icon={<Icon name="map-pin" size={14} color={colors.primary} />}
+                                    onPress={() => setFocusedCoords({ lat: v.location!.latitude, lng: v.location!.longitude })}
+                                  />
+                                )}
+
+                                {v.verificationStatus !== 'APPROVED' && (
+                                  <Button
+                                    title="Approve"
+                                    variant="success"
+                                    size="sm"
+                                    icon={<Icon name="check" size={14} color="#FFFFFF" />}
+                                    onPress={() => handleApprovalAction('VEHICLE', v._id, 'APPROVE')}
+                                  />
+                                )}
+
+                                {v.verificationStatus !== 'SUSPENDED' && (
+                                  <Button
+                                    title="Suspend"
+                                    variant="danger"
+                                    size="sm"
+                                    icon={<Icon name="trash-2" size={14} color="#FFFFFF" />}
+                                    onPress={() => handleApprovalAction('VEHICLE', v._id, 'SUSPEND')}
+                                  />
+                                )}
+                              </View>
+                            </CardBody>
+                          </Card>
+                        ))
+                      )}
+
+                      {/* Server-Side Pagination Controls for Self-Owned Vehicles */}
+                      {vehicleTotalPages > 1 && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs }}>
+                          <Button
+                            title="← Previous"
+                            variant="outline"
+                            size="sm"
+                            disabled={vehiclePage <= 1}
+                            onPress={() => setVehiclePage((p) => Math.max(1, p - 1))}
+                          />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textSecondary }}>
+                            Page {vehiclePage} of {vehicleTotalPages}
+                          </Text>
+                          <Button
+                            title="Next →"
+                            variant="outline"
+                            size="sm"
+                            disabled={vehiclePage >= vehicleTotalPages}
+                            onPress={() => setVehiclePage((p) => Math.min(vehicleTotalPages, p + 1))}
+                          />
+                        </View>
+                      )}
+                    </CardBody>
+                  </Card>
                 )}
               </View>
             )}
@@ -1746,6 +2116,293 @@ export const AdminDashboardView: React.FC = () => {
                   {selectedTrip.safetyEvent.description && (
                     <Text style={{ fontSize: 12, color: '#991B1B', fontStyle: 'italic', marginTop: 2 }}>
                       "{selectedTrip.safetyEvent.description}"
+                    </Text>
+                  )}
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        )}
+      </Modal>
+
+      {/* MODAL: ADMIN FOCUSED VEHICLE OPERATIONAL DETAIL RECORD */}
+      <Modal
+        visible={showVehicleDetailModal}
+        onClose={() => {
+          setShowVehicleDetailModal(false);
+          setSelectedVehicleDetail(null);
+        }}
+        title={`Operational Record — Vehicle ${selectedVehicleDetail?.shortVehicleNumber || ''}`}
+      >
+        {loadingVehicleDetail || !selectedVehicleDetail ? (
+          <LoadingState message="Loading comprehensive vehicle operational details & telemetry..." />
+        ) : (
+          <ScrollView style={{ maxHeight: 560 }}>
+            <View style={{ gap: spacing.md }}>
+              {/* Header Title Banner & Verification Status */}
+              <View style={[styles.vehicleDetailHeader, { backgroundColor: colors.surfaceElevated, padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, borderColor: colors.border }]}>
+                <View style={{ gap: 2 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                    <Icon name="truck" size={18} color={colors.primary} />
+                    <Text style={[styles.vehicleDetailTitle, { color: colors.textPrimary }]}>
+                      Vehicle {selectedVehicleDetail.shortVehicleNumber}
+                    </Text>
+                    <Badge
+                      label={selectedVehicleDetail.ownershipType}
+                      variant={selectedVehicleDetail.ownershipType === 'SELF_OWNED' ? 'warning' : 'info'}
+                    />
+                    <Badge
+                      label={selectedVehicleDetail.status}
+                      variant={selectedVehicleDetail.status === 'ACTIVE' ? 'success' : 'neutral'}
+                    />
+                  </View>
+                  <Text style={[styles.vehicleDetailSubtitle, { color: colors.textSecondary }]}>
+                    Registration: {selectedVehicleDetail.registrationNumber} • Custom ID: {selectedVehicleDetail.garageCustomId || 'N/A'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Driver Authorization Verification Banner */}
+              <View
+                style={[
+                  styles.verificationBox,
+                  {
+                    backgroundColor: selectedVehicleDetail.isDriverVerifiedForVehicle ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                    borderColor: selectedVehicleDetail.isDriverVerifiedForVehicle ? '#10B981' : '#F59E0B',
+                  },
+                ]}
+              >
+                <Icon
+                  name={selectedVehicleDetail.isDriverVerifiedForVehicle ? 'check-circle' : 'alert-triangle'}
+                  size={20}
+                  color={selectedVehicleDetail.isDriverVerifiedForVehicle ? '#10B981' : '#F59E0B'}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      fontWeight: '800',
+                      color: selectedVehicleDetail.isDriverVerifiedForVehicle ? '#10B981' : '#D97706',
+                    }}
+                  >
+                    {selectedVehicleDetail.isDriverVerifiedForVehicle
+                      ? 'Driver-Vehicle Verification Confirmed'
+                      : 'Driver Verification Alert'}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: selectedVehicleDetail.isDriverVerifiedForVehicle ? colors.textSecondary : '#D97706',
+                      marginTop: 2,
+                    }}
+                  >
+                    {selectedVehicleDetail.isDriverVerifiedForVehicle
+                      ? `Driver ${selectedVehicleDetail.assignedDriverId?.name || 'N/A'} is authorized and active for this vehicle.`
+                      : `⚠️ ${selectedVehicleDetail.driverVerificationReason}`}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Section 1: Vehicle Identity & Assigned Driver */}
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.xs }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 4 }}>
+                  Vehicle Identity & Driver Assignment
+                </Text>
+                <View style={styles.detailGrid}>
+                  <View style={styles.detailGridItem}>
+                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Short Number</Text>
+                    <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedVehicleDetail.shortVehicleNumber}</Text>
+                  </View>
+                  <View style={styles.detailGridItem}>
+                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Reg Number</Text>
+                    <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedVehicleDetail.registrationNumber}</Text>
+                  </View>
+                  <View style={styles.detailGridItem}>
+                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Ownership Mode</Text>
+                    <Text style={[styles.detailVal, { color: colors.primary }]}>{selectedVehicleDetail.ownershipType}</Text>
+                  </View>
+                  <View style={styles.detailGridItem}>
+                    <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Model</Text>
+                    <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedVehicleDetail.modelName || 'Standard Electric Rickshaw'}</Text>
+                  </View>
+                </View>
+
+                {/* Assigned Driver Box */}
+                <View style={{ marginTop: spacing.xs, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textSecondary }}>Assigned Driver Details</Text>
+                  {selectedVehicleDetail.assignedDriverId ? (
+                    <View style={styles.detailGrid}>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Driver Name</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedVehicleDetail.assignedDriverId.name}</Text>
+                      </View>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Phone Number</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedVehicleDetail.assignedDriverId.phone}</Text>
+                      </View>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Driver Mode</Text>
+                        <Text style={[styles.detailVal, { color: colors.primary }]}>{selectedVehicleDetail.assignedDriverId.driverMode || 'N/A'}</Text>
+                      </View>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>NID Number</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedVehicleDetail.assignedDriverId.nidNumber || 'N/A'}</Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic' }}>No driver currently assigned to this vehicle.</Text>
+                  )}
+                </View>
+
+                {/* Garage Association Box */}
+                {selectedVehicleDetail.garageId && (
+                  <View style={{ marginTop: spacing.xs, paddingTop: spacing.xs, borderTopWidth: 1, borderTopColor: colors.border, gap: 4 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textSecondary }}>Operating Garage Identity</Text>
+                    <View style={styles.detailGrid}>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Garage Name</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedVehicleDetail.garageId.name}</Text>
+                      </View>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Garage ID</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedVehicleDetail.garageId.garageId || 'N/A'}</Text>
+                      </View>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Phone</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedVehicleDetail.garageId.phone}</Text>
+                      </View>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Address</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedVehicleDetail.garageId.address}</Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              {/* Section 2: GPS Location Telemetry */}
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.xs }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary }}>
+                    GPS & Location Telemetry
+                  </Text>
+                  {selectedVehicleDetail.location && (
+                    <Badge
+                      label={selectedVehicleDetail.location.isFresh ? 'FRESH TELEMETRY' : `STALE (${selectedVehicleDetail.location.lastSeenAgoSeconds}s ago)`}
+                      variant={selectedVehicleDetail.location.isFresh ? 'success' : 'warning'}
+                    />
+                  )}
+                </View>
+
+                {selectedVehicleDetail.location ? (
+                  <>
+                    <View style={styles.detailGrid}>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Latitude / Longitude</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                          [{selectedVehicleDetail.location.latitude.toFixed(5)}, {selectedVehicleDetail.location.longitude.toFixed(5)}]
+                        </Text>
+                      </View>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Speed / Heading</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                          {Math.round(selectedVehicleDetail.location.speed || 0)} km/h • {Math.round(selectedVehicleDetail.location.heading || 0)}°
+                        </Text>
+                      </View>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Accuracy</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                          ±{Math.round(selectedVehicleDetail.location.accuracy || 0)}m
+                        </Text>
+                      </View>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Status</Text>
+                        <Text style={[styles.detailVal, { color: colors.primary }]}>
+                          {selectedVehicleDetail.location.status}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Button
+                      title="Focus Map Location"
+                      variant="outline"
+                      size="sm"
+                      icon={<Icon name="map-pin" size={14} color={colors.primary} />}
+                      onPress={() => {
+                        if (selectedVehicleDetail?.location) {
+                          setFocusedCoords({
+                            lat: selectedVehicleDetail.location.latitude,
+                            lng: selectedVehicleDetail.location.longitude,
+                          });
+                          setActiveRouteId('admin-overview');
+                          setShowVehicleDetailModal(false);
+                          showToast('Map centered on vehicle coordinates', 'info');
+                        }
+                      }}
+                      style={{ marginTop: spacing.xs }}
+                    />
+                  </>
+                ) : (
+                  <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic' }}>
+                    No recent GPS location telemetry broadcasted for this vehicle.
+                  </Text>
+                )}
+              </View>
+
+              {/* Section 3: Active Ride Summary */}
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.xs }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 4 }}>
+                  Active Ride Summary
+                </Text>
+                {selectedVehicleDetail.activeRide ? (
+                  <View style={styles.activeRideBox}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: colors.textPrimary }}>
+                        {selectedVehicleDetail.activeRide.rideId}
+                      </Text>
+                      <Badge label={selectedVehicleDetail.activeRide.status} variant="success" />
+                    </View>
+                    <View style={styles.detailGrid}>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Passenger</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                          {selectedVehicleDetail.activeRide.passengerName} ({selectedVehicleDetail.activeRide.passengerPhone})
+                        </Text>
+                      </View>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Pickup Area</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                          {selectedVehicleDetail.activeRide.approximatePickupArea || 'N/A'}
+                        </Text>
+                      </View>
+                      <View style={styles.detailGridItem}>
+                        <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Distance / Telemetry</Text>
+                        <Text style={[styles.detailVal, { color: colors.textPrimary }]}>
+                          {((selectedVehicleDetail.activeRide.distanceMeters || 0) / 1000).toFixed(2)} km ({selectedVehicleDetail.activeRide.routePointCount || 0} pts)
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic' }}>
+                    No active ride currently in progress for this vehicle.
+                  </Text>
+                )}
+              </View>
+
+              {/* Section 4: Safety & SOS Incident Log */}
+              {selectedVehicleDetail.safetyEvent && (
+                <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: '#FEF2F2', borderColor: '#EF4444', gap: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Icon name="alert-circle" size={18} color="#DC2626" />
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#DC2626' }}>Safety Alert Incident Logged</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: '#991B1B' }}>
+                    Event ID: {selectedVehicleDetail.safetyEvent.eventId} • Severity: {selectedVehicleDetail.safetyEvent.severity} • Status: {selectedVehicleDetail.safetyEvent.status}
+                  </Text>
+                  {selectedVehicleDetail.safetyEvent.description && (
+                    <Text style={{ fontSize: 12, color: '#991B1B', fontStyle: 'italic', marginTop: 2 }}>
+                      "{selectedVehicleDetail.safetyEvent.description}"
                     </Text>
                   )}
                 </View>

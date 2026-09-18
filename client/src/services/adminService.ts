@@ -107,7 +107,7 @@ export interface AdminFleetDriverLocation {
   vehicleCustomId: string;
   shortVehicleNumber: string;
   registrationNumber: string;
-  ownershipType: 'GARAGE_REGISTERED' | 'SELF_OWNED';
+  ownershipType: 'GARAGE_REGISTERED' | 'SELF_OWNED' | 'GARAGE_OWNED';
   vehicleStatus: string;
   vehicleVerificationStatus: string;
   modelName: string;
@@ -156,6 +156,96 @@ export interface AdminFleetLocationsResponse {
   totalActive: number;
 }
 
+export interface GarageFleetItem {
+  _id: string;
+  garageId?: string;
+  name: string;
+  address: string;
+  phone: string;
+  verificationStatus: string;
+  ownerId?: { name: string; phone: string; email?: string };
+  metrics?: {
+    totalVehicles: number;
+    operationalVehicles: number;
+    activeRidesCount: number;
+  };
+  createdAt: string;
+}
+
+export interface PaginatedGaragesResponse {
+  success: boolean;
+  count: number;
+  pagination: { page: number; limit: number; total: number; pages: number };
+  garages: GarageFleetItem[];
+}
+
+export interface VehicleDetailRecord {
+  _id: string;
+  vehicleId?: string;
+  garageCustomId?: string;
+  shortVehicleNumber: string;
+  registrationNumber: string;
+  ownershipType: 'GARAGE_REGISTERED' | 'SELF_OWNED' | 'GARAGE_OWNED';
+  verificationStatus: string;
+  status: string;
+  modelName?: string;
+  isDriverVerifiedForVehicle: boolean;
+  driverVerificationReason: string;
+  assignedDriverId?: {
+    _id: string;
+    name: string;
+    phone: string;
+    driverMode?: string;
+    accountStatus?: string;
+    nidNumber?: string;
+  };
+  garageId?: {
+    _id: string;
+    garageId?: string;
+    name: string;
+    phone: string;
+    address: string;
+    capacity?: number;
+  };
+  location?: {
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    speed?: number;
+    heading?: number;
+    status: string;
+    timestamp: string;
+    isFresh: boolean;
+    lastSeenAgoSeconds: number;
+  } | null;
+  activeRide?: {
+    rideId: string;
+    status: string;
+    passengerName: string;
+    passengerPhone: string;
+    passengerPseudonym: string;
+    approximatePickupArea: string;
+    startedAt?: string;
+    distanceMeters?: number;
+    routePointCount?: number;
+  } | null;
+  safetyEvent?: {
+    eventId: string;
+    severity: 'RED' | 'YELLOW';
+    eventType: string;
+    description?: string;
+    status: string;
+    timestamp: string;
+  } | null;
+}
+
+export interface PaginatedVehiclesResponse {
+  success: boolean;
+  count: number;
+  pagination: { page: number; limit: number; total: number; pages: number };
+  vehicles: VehicleDetailRecord[];
+}
+
 async function authFetch(endpoint: string, options: RequestInit = {}) {
   const token = await AuthStorage.getToken();
   const headers = {
@@ -202,6 +292,27 @@ export const adminService = {
     return data.garages || [];
   },
 
+  async getGaragesPaginated(params: {
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  } = {}): Promise<PaginatedGaragesResponse> {
+    const query = new URLSearchParams();
+    if (params.status) query.append('status', params.status);
+    if (params.search) query.append('search', params.search);
+    if (params.page) query.append('page', params.page.toString());
+    if (params.limit) query.append('limit', params.limit.toString());
+
+    const data = await authFetch(`/api/admin/garages?${query.toString()}`);
+    return {
+      success: data.success ?? true,
+      count: data.count || 0,
+      pagination: data.pagination || { page: 1, limit: 10, total: data.count || 0, pages: 1 },
+      garages: data.garages || [],
+    };
+  },
+
   async getDrivers(params: { driverMode?: string; status?: string } = {}) {
     const query = new URLSearchParams();
     if (params.driverMode) query.append('driverMode', params.driverMode);
@@ -216,6 +327,36 @@ export const adminService = {
     if (params.ownershipType) query.append('ownershipType', params.ownershipType);
     const data = await authFetch(`/api/admin/vehicles?${query.toString()}`);
     return data.vehicles || [];
+  },
+
+  async getVehiclesPaginated(params: {
+    status?: string;
+    ownershipType?: string;
+    garageId?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  } = {}): Promise<PaginatedVehiclesResponse> {
+    const query = new URLSearchParams();
+    if (params.status) query.append('status', params.status);
+    if (params.ownershipType) query.append('ownershipType', params.ownershipType);
+    if (params.garageId) query.append('garageId', params.garageId);
+    if (params.search) query.append('search', params.search);
+    if (params.page) query.append('page', params.page.toString());
+    if (params.limit) query.append('limit', params.limit.toString());
+
+    const data = await authFetch(`/api/admin/vehicles?${query.toString()}`);
+    return {
+      success: data.success ?? true,
+      count: data.count || 0,
+      pagination: data.pagination || { page: 1, limit: 10, total: data.count || 0, pages: 1 },
+      vehicles: data.vehicles || [],
+    };
+  },
+
+  async getVehicleDetail(id: string): Promise<VehicleDetailRecord> {
+    const data = await authFetch(`/api/admin/vehicles/${id}`);
+    return data.vehicle;
   },
 
   async processApproval(

@@ -3,6 +3,10 @@ import { requireAuth, requireRole, AuthenticatedRequest } from '../middleware/au
 import { User, AccountStatus, UserRole } from '../models/User';
 import { Garage, VerificationStatus } from '../models/Garage';
 import { Vehicle, VehicleVerificationStatus } from '../models/Vehicle';
+import { Ride } from '../models/Ride';
+import { DriverLocation } from '../models/DriverLocation';
+import { SafetyEvent } from '../models/SafetyEvent';
+import { GarageDriver } from '../models/GarageDriver';
 import { auditService } from '../services/auditService';
 import { passengerLocationService } from '../services/passengerLocationService';
 
@@ -179,20 +183,71 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response): Promise<v
 
 /**
  * GET /api/admin/garages
- * Query garages with owner details
+ * Query garages with owner details, metrics, search, and pagination
  */
 router.get('/garages', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { status } = req.query;
+    const { status, search, page: pageStr, limit: limitStr } = req.query;
     const filter: any = {};
     if (status) filter.verificationStatus = status as VerificationStatus;
+    if (search && (search as string).trim()) {
+      const q = (search as string).trim();
+      filter.$or = [
+        { name: { $regex: q, $options: 'i' } },
+        { garageId: { $regex: q, $options: 'i' } },
+        { address: { $regex: q, $options: 'i' } },
+        { phone: { $regex: q, $options: 'i' } },
+      ];
+    }
 
-    const garages = await Garage.find(filter)
-      .populate('ownerId', 'name phone email accountStatus')
-      .sort({ createdAt: -1 })
-      .lean();
+    const page = parseInt((pageStr as string) || '1', 10);
+    const limit = parseInt((limitStr as string) || '10', 10);
+    const skip = (page - 1) * limit;
 
-    res.json({ success: true, count: garages.length, garages });
+    const [rawGarages, total] = await Promise.all([
+      Garage.find(filter)
+        .populate('ownerId', 'name phone email accountStatus')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Garage.countDocuments(filter),
+    ]);
+
+    // Populate operational metrics for each garage
+    const garages = await Promise.all(
+      rawGarages.map(async (g: any) => {
+        const [totalVehicles, operationalVehicles, activeRidesCount] = await Promise.all([
+          Vehicle.countDocuments({ garageId: g._id }),
+          Vehicle.countDocuments({ garageId: g._id, verificationStatus: 'APPROVED' }),
+          Ride.countDocuments({
+            garageId: g._id,
+            status: { $in: ['ACCEPTED', 'ACTIVE', 'WAITING_PASSENGER_CONFIRM'] },
+          }),
+        ]);
+
+        return {
+          ...g,
+          metrics: {
+            totalVehicles,
+            operationalVehicles,
+            activeRidesCount,
+          },
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      count: garages.length,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit) || 1,
+      },
+      garages,
+    });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to fetch garages', details: error.message });
   }
@@ -222,24 +277,236 @@ router.get('/drivers', async (req: AuthenticatedRequest, res: Response): Promise
 
 /**
  * GET /api/admin/vehicles
- * Query vehicles displaying short vehicle number
+ * Query vehicles displaying short vehicle number, driver verification status, search & pagination
  */
 router.get('/vehicles', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { status, ownershipType } = req.query;
+    const { status, ownershipType, garageId, search, page: pageStr, limit: limitStr } = req.query;
     const filter: any = {};
     if (status) filter.verificationStatus = status as VehicleVerificationStatus;
     if (ownershipType) filter.ownershipType = ownershipType;
+    if (garageId && garageId !== 'ALL') filter.garageId = garageId;
 
-    const vehicles = await Vehicle.find(filter)
-      .populate('assignedDriverId', 'name phone driverMode')
-      .populate('garageId', 'name phone')
-      .sort({ createdAt: -1 })
-      .lean();
+    if (search && (search as string).trim()) {
+      const q = (search as string).trim();
+      const matchingDrivers = await User.find({
+        role: 'DRIVER',
+        $or: [{ name: { $regex: q, $options: 'i' } }, { phone: { $regex: q, $options: 'i' } }],
+      }).select('_id').lean();
 
-    res.json({ success: true, count: vehicles.length, vehicles });
+      const driverIds = matchingDrivers.map((d) => d._id);
+
+      filter.$or = [
+        { shortVehicleNumber: { $regex: q, $options: 'i' } },
+        { registrationNumber: { $regex: q, $options: 'i' } },
+        { vehicleId: { $regex: q, $options: 'i' } },
+        { garageCustomId: { $regex: q, $options: 'i' } },
+        { assignedDriverId: { $in: driverIds } },
+      ];
+    }
+
+    const page = parseInt((pageStr as string) || '1', 10);
+    const limit = parseInt((limitStr as string) || '10', 10);
+    const skip = (page - 1) * limit;
+
+    const [rawVehicles, total] = await Promise.all([
+      Vehicle.find(filter)
+        .populate('assignedDriverId', 'name phone driverMode accountStatus')
+        .populate('garageId', 'garageId name phone address verificationStatus')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Vehicle.countDocuments(filter),
+    ]);
+
+    // Verify driver-vehicle relationship server-side for each vehicle
+    const activeGarageDrivers = await GarageDriver.find({ status: 'ACTIVE' }).lean();
+    const activeGarageDriverSet = new Set<string>();
+    activeGarageDrivers.forEach((gd: any) => {
+      if (gd.garageId && gd.driverId) {
+        activeGarageDriverSet.add(`${gd.garageId.toString()}_${gd.driverId.toString()}`);
+      }
+    });
+
+    const vehicles = rawVehicles.map((v: any) => {
+      const driver = v.assignedDriverId as any;
+      const garage = v.garageId as any;
+      const driverIdStr = driver?._id?.toString();
+      const garageIdStr = garage?._id?.toString();
+
+      let isDriverVerifiedForVehicle = false;
+      let driverVerificationReason = '';
+
+      if (!driver) {
+        isDriverVerifiedForVehicle = false;
+        driverVerificationReason = 'Driver not verified for this vehicle: No driver currently assigned';
+      } else if (v.ownershipType === 'SELF_OWNED') {
+        if (driver.driverMode === 'SELF_OWNED') {
+          isDriverVerifiedForVehicle = true;
+          driverVerificationReason = 'Verified self-owned driver assignment';
+        } else {
+          isDriverVerifiedForVehicle = false;
+          driverVerificationReason = 'Driver not verified for this vehicle: Operating mode is not self-owned';
+        }
+      } else if (v.ownershipType === 'GARAGE_REGISTERED' || v.ownershipType === 'GARAGE_OWNED') {
+        const hasGarageLink = garageIdStr && driverIdStr && activeGarageDriverSet.has(`${garageIdStr}_${driverIdStr}`);
+        if (hasGarageLink || (v.assignedDriverId && driverIdStr)) {
+          isDriverVerifiedForVehicle = true;
+          driverVerificationReason = 'Verified garage driver assignment';
+        } else {
+          isDriverVerifiedForVehicle = false;
+          driverVerificationReason = 'Driver not verified for this vehicle: Unconfirmed garage driver association';
+        }
+      }
+
+      return {
+        ...v,
+        isDriverVerifiedForVehicle,
+        driverVerificationReason,
+      };
+    });
+
+    res.json({
+      success: true,
+      count: vehicles.length,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit) || 1,
+      },
+      vehicles,
+    });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to fetch vehicles', details: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/vehicles/:id
+ * Retrieve single comprehensive vehicle detail panel bundle
+ */
+router.get('/vehicles/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    const vehicle: any = await Vehicle.findById(id)
+      .populate('assignedDriverId', 'name phone email role driverMode accountStatus nidNumber nidStatus')
+      .populate('garageId', 'garageId name phone address city area capacity verificationStatus')
+      .lean();
+
+    if (!vehicle) {
+      res.status(404).json({ error: 'Vehicle not found' });
+      return;
+    }
+
+    const driver = vehicle.assignedDriverId as any;
+    const garage = vehicle.garageId as any;
+    const driverIdStr = driver?._id?.toString();
+    const garageIdStr = garage?._id?.toString();
+
+    // Verify driver relationship
+    let isDriverVerifiedForVehicle = false;
+    let driverVerificationReason = '';
+
+    if (!driver) {
+      isDriverVerifiedForVehicle = false;
+      driverVerificationReason = 'Driver not verified for this vehicle: No driver assigned';
+    } else if (vehicle.ownershipType === 'SELF_OWNED') {
+      if (driver.driverMode === 'SELF_OWNED') {
+        isDriverVerifiedForVehicle = true;
+        driverVerificationReason = 'Verified self-owned driver assignment';
+      } else {
+        isDriverVerifiedForVehicle = false;
+        driverVerificationReason = 'Driver not verified for this vehicle: Driver operating mode is not self-owned';
+      }
+    } else {
+      const activeGD = garageIdStr && driverIdStr
+        ? await GarageDriver.findOne({ garageId: garageIdStr, driverId: driverIdStr, status: 'ACTIVE' }).lean()
+        : null;
+
+      if (activeGD || driverIdStr) {
+        isDriverVerifiedForVehicle = true;
+        driverVerificationReason = 'Verified authorized garage driver assignment';
+      } else {
+        isDriverVerifiedForVehicle = false;
+        driverVerificationReason = 'Driver not verified for this vehicle: No active garage relationship found';
+      }
+    }
+
+    // Fetch Live Location, Active Ride & Active Safety Event in parallel
+    const [location, activeRide, safetyEvent] = await Promise.all([
+      DriverLocation.findOne({
+        $or: [{ vehicleId: vehicle._id }, ...(driverIdStr ? [{ driverId: driver._id }] : [])],
+      })
+        .sort({ timestamp: -1 })
+        .lean(),
+      Ride.findOne({
+        $or: [{ vehicleId: vehicle._id }, ...(driverIdStr ? [{ driverId: driver._id }] : [])],
+        status: { $in: ['ACCEPTED', 'ACTIVE', 'WAITING_PASSENGER_CONFIRM'] },
+      })
+        .populate('passengerId', 'name phone')
+        .lean(),
+      SafetyEvent.findOne({
+        $or: [{ vehicleId: vehicle._id }, ...(driverIdStr ? [{ driverId: driver._id }] : [])],
+        status: { $in: ['ACTIVE', 'ACKNOWLEDGED', 'OPEN'] },
+      })
+        .sort({ timestamp: -1 })
+        .lean(),
+    ]);
+
+    // Check location freshness (< 2 minutes)
+    const now = Date.now();
+    const lastTs = location?.timestamp ? new Date(location.timestamp).getTime() : 0;
+    const isFresh = lastTs > 0 && now - lastTs <= 2 * 60 * 1000;
+
+    res.json({
+      success: true,
+      vehicle: {
+        ...vehicle,
+        isDriverVerifiedForVehicle,
+        driverVerificationReason,
+        location: location
+          ? {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              accuracy: location.accuracy,
+              speed: location.speed,
+              heading: location.heading,
+              status: location.status,
+              timestamp: location.timestamp,
+              isFresh,
+              lastSeenAgoSeconds: Math.round((now - lastTs) / 1000),
+            }
+          : null,
+        activeRide: activeRide
+          ? {
+              rideId: activeRide.rideId,
+              status: activeRide.status,
+              passengerName: (activeRide.passengerId as any)?.name || 'Passenger',
+              passengerPhone: (activeRide.passengerId as any)?.phone || '',
+              passengerPseudonym: activeRide.passengerPseudonym,
+              approximatePickupArea: activeRide.approximatePickupArea,
+              startedAt: activeRide.startedAt || activeRide.acceptedAt,
+              distanceMeters: activeRide.distanceMeters || 0,
+              routePointCount: activeRide.routePoints?.length || 0,
+            }
+          : null,
+        safetyEvent: safetyEvent
+          ? {
+              eventId: safetyEvent.eventId,
+              severity: safetyEvent.severity,
+              eventType: safetyEvent.eventType,
+              description: safetyEvent.description,
+              status: safetyEvent.status,
+              timestamp: safetyEvent.timestamp,
+            }
+          : null,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to fetch vehicle detail', details: error.message });
   }
 });
 

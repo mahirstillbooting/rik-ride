@@ -187,7 +187,7 @@ export const AdminAnalyticsView: React.FC = () => {
       {/* SECTION 1: LIVE CURRENT SNAPSHOT (Real-Time State) */}
       <View style={[styles.liveSnapshotBanner, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
         <View style={styles.liveHeaderRow}>
-          <View style={styles.pulseIndicator} />
+          <Icon name="activity" size={16} color="#10B981" />
           <Text style={[styles.liveHeaderTitle, { color: colors.textPrimary }]}>
             LIVE CURRENT OPERATIONS (Real-Time Status Snapshot)
           </Text>
@@ -327,22 +327,47 @@ export const AdminAnalyticsView: React.FC = () => {
                 <View style={{ gap: spacing.xs }}>
                   <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textSecondary }}>Payment Method Distribution:</Text>
 
-                  {Object.entries(pay?.paymentMethods || {}).map(([method, data]) => (
-                    <View key={method} style={[styles.paymentMethodRow, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Icon
-                          name={method === 'CASH' ? 'dollar-sign' : 'credit-card'}
-                          size={14}
-                          color={colors.primary}
-                        />
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{method}</Text>
+                  {Object.entries(pay?.paymentMethods || {}).map(([method, data]) => {
+                    const isCash = method === 'CASH';
+                    const isBkash = method === 'BKASH';
+                    const isNagad = method === 'NAGAD';
+                    const iconColor = isCash
+                      ? colors.success
+                      : isBkash
+                      ? '#E2136E'
+                      : isNagad
+                      ? '#F7941D'
+                      : colors.primary;
+                    const methodLabel = isCash
+                      ? 'Cash Payment'
+                      : isBkash
+                      ? 'bKash MFS'
+                      : isNagad
+                      ? 'Nagad MFS'
+                      : method === 'OTHER_MFS'
+                      ? 'Other MFS'
+                      : method;
+
+                    return (
+                      <View key={method} style={[styles.paymentMethodRow, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Icon
+                            name={isCash ? 'dollar-sign' : 'credit-card'}
+                            size={16}
+                            color={iconColor}
+                          />
+                          <View>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{methodLabel}</Text>
+                            <Text style={{ fontSize: 10, color: colors.textMuted }}>{method}</Text>
+                          </View>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: colors.primary }}>৳{data.totalFare}</Text>
+                          <Text style={{ fontSize: 11, color: colors.textMuted }}>{data.count} rides</Text>
+                        </View>
                       </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={{ fontSize: 13, fontWeight: '800', color: colors.primary }}>৳{data.totalFare}</Text>
-                        <Text style={{ fontSize: 11, color: colors.textMuted }}>{data.count} rides</Text>
-                      </View>
-                    </View>
-                  ))}
+                    );
+                  })}
                 </View>
               </CardBody>
             </Card>

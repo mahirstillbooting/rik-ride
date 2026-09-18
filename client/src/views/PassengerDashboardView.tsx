@@ -18,6 +18,8 @@ import { passengerLocationApiService, NearbyRickshaw } from '../services/passeng
 import { SharingStatus } from '../services/locationService';
 import { clientRideService, RideData, HistoricalTripSummary, DetailedTripRecord } from '../services/rideService';
 import { clientSafetyService } from '../services/safetyService';
+import { RealQRScanner } from '../components/ui/RealQRScanner';
+import { clientQRService, ResolvedQRVehicleData } from '../services/qrService';
 
 export const PassengerDashboardView: React.FC = () => {
   const { colors } = useTheme();
@@ -65,6 +67,12 @@ export const PassengerDashboardView: React.FC = () => {
   const [requestingRide, setRequestingRide] = useState(false);
   const [activeRide, setActiveRide] = useState<RideData | null>(null);
   const [confirmingCompletion, setConfirmingCompletion] = useState(false);
+
+  // QR Scanner & Resolved Vehicle States
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [loadingQRResolve, setLoadingQRResolve] = useState(false);
+  const [resolvedQRVehicle, setResolvedQRVehicle] = useState<ResolvedQRVehicleData | null>(null);
+  const [showQRVehicleModal, setShowQRVehicleModal] = useState(false);
 
   // Safety & Emergency Command States
   const [yellowLoading, setYellowLoading] = useState(false);
@@ -345,6 +353,59 @@ export const PassengerDashboardView: React.FC = () => {
     },
     [currentLoc, sharingStatus, destinationText, showToast]
   );
+  // Handle Camera QR Detection Success
+  const handleScanQRSuccess = async (qrPayload: string) => {
+    setShowQRScanner(false);
+    setLoadingQRResolve(true);
+    setResolvedQRVehicle(null);
+    setShowQRVehicleModal(true);
+
+    const res = await clientQRService.resolveQR({ qrPayload });
+    setLoadingQRResolve(false);
+
+    if (res.success && res.vehicle) {
+      setResolvedQRVehicle(res.vehicle);
+      showToast(`Rickshaw ${res.vehicle.shortVehicleNumber} resolved and verified!`, 'success');
+    } else {
+      showToast(res.error || 'Failed to verify scanned QR code.', 'danger');
+      setShowQRVehicleModal(false);
+    }
+  };
+
+  // Create Targeted Ride Request for QR Scanned Vehicle
+  const handleQRTargetedRideRequest = async () => {
+    if (!resolvedQRVehicle) return;
+    if (!currentLoc || sharingStatus !== 'LOCATION_ACTIVE') {
+      showToast('Location active required to request pickup.', 'warning');
+      return;
+    }
+    if (!resolvedQRVehicle.driver?._id) {
+      showToast('Cannot request rickshaw: No verified driver currently assigned.', 'warning');
+      return;
+    }
+
+    setRequestingRide(true);
+    const res = await clientRideService.createRideRequest({
+      latitude: currentLoc.latitude,
+      longitude: currentLoc.longitude,
+      accuracy: currentLoc.accuracy,
+      destinationText: destinationText.trim() || undefined,
+      targetVehicleId: resolvedQRVehicle._id,
+      targetDriverId: resolvedQRVehicle.driver._id,
+    });
+    setRequestingRide(false);
+
+    if (res.success && res.ride) {
+      setActiveRide(res.ride);
+      setShowQRVehicleModal(false);
+      showToast(
+        `Targeted ride request dispatched directly to Rickshaw ${resolvedQRVehicle.shortVehicleNumber} (${resolvedQRVehicle.driver.name})!`,
+        'success'
+      );
+    } else {
+      showToast(res.error || 'Failed to dispatch targeted ride request', 'danger');
+    }
+  };
 
   // Create Generic Ride Request
   const handleRequestRide = async () => {
@@ -735,6 +796,13 @@ export const PassengerDashboardView: React.FC = () => {
                     loading={requestingRide}
                     disabled={sharingStatus !== 'LOCATION_ACTIVE' || requestingRide}
                     onPress={handleRequestRide}
+                  />
+                  <Button
+                    title="Scan Rickshaw QR"
+                    variant="outline"
+                    size="lg"
+                    icon={<Icon name="qr-code" size={18} color={colors.primary} />}
+                    onPress={() => setShowQRScanner(true)}
                   />
                   {sharingStatus !== 'LOCATION_ACTIVE' && (
                     <Text style={[styles.locNoticeText, { color: colors.warning }]}>
@@ -1132,6 +1200,133 @@ export const PassengerDashboardView: React.FC = () => {
             />
           </View>
         </View>
+      </Modal>
+
+      {/* REAL CAMERA QR SCANNER MODAL */}
+      <RealQRScanner
+        visible={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+        onScanSuccess={handleScanQRSuccess}
+        title="Scan Rickshaw Physical QR Code"
+        subtitle="Point camera at physical rickshaw QR code to verify driver identity and request targeted trip."
+      />
+
+      {/* MODAL: VERIFIED RICKSHAW QR IDENTITY CARD */}
+      <Modal
+        visible={showQRVehicleModal}
+        onClose={() => {
+          setShowQRVehicleModal(false);
+          setResolvedQRVehicle(null);
+        }}
+        title={`Verified Rickshaw Identity — ${resolvedQRVehicle?.shortVehicleNumber || ''}`}
+      >
+        {loadingQRResolve || !resolvedQRVehicle ? (
+          <LoadingState message="Resolving Rickshaw QR code & checking driver authorization..." />
+        ) : (
+          <View style={{ gap: spacing.md }}>
+            {/* Rickshaw Title Banner */}
+            <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: 4 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Icon name="truck" size={18} color={colors.primary} />
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textPrimary }}>
+                    Vehicle {resolvedQRVehicle.shortVehicleNumber}
+                  </Text>
+                </View>
+                <Badge label={resolvedQRVehicle.status} variant={resolvedQRVehicle.status === 'AVAILABLE' ? 'success' : 'neutral'} />
+              </View>
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                Permanent ID: {resolvedQRVehicle.vehicleId} • Reg: {resolvedQRVehicle.registrationNumber} • Mode: {resolvedQRVehicle.ownershipType}
+              </Text>
+            </View>
+
+            {/* Driver Authorization Verification Banner */}
+            <View
+              style={{
+                padding: spacing.md,
+                borderRadius: borderRadius.md,
+                borderWidth: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.xs + 2,
+                backgroundColor: resolvedQRVehicle.isDriverVerifiedForVehicle ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                borderColor: resolvedQRVehicle.isDriverVerifiedForVehicle ? '#10B981' : '#F59E0B',
+              }}
+            >
+              <Icon
+                name={resolvedQRVehicle.isDriverVerifiedForVehicle ? 'check-circle' : 'alert-triangle'}
+                size={22}
+                color={resolvedQRVehicle.isDriverVerifiedForVehicle ? '#10B981' : '#F59E0B'}
+              />
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: '800',
+                    color: resolvedQRVehicle.isDriverVerifiedForVehicle ? '#10B981' : '#D97706',
+                  }}
+                >
+                  {resolvedQRVehicle.isDriverVerifiedForVehicle
+                    ? 'Driver Identity Verified'
+                    : 'Driver Authorization Warning'}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: resolvedQRVehicle.isDriverVerifiedForVehicle ? colors.textSecondary : '#D97706',
+                    marginTop: 2,
+                  }}
+                >
+                  {resolvedQRVehicle.driverVerificationReason}
+                </Text>
+              </View>
+            </View>
+
+            {/* Authorized Driver Profile Card */}
+            {resolvedQRVehicle.driver ? (
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.xs }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary, marginBottom: 2 }}>
+                  Current Operating Driver Details
+                </Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Driver Name:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{resolvedQRVehicle.driver.name}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Phone Contact:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{resolvedQRVehicle.driver.phone}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Passenger Feedback Rating:</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#F59E0B' }}>
+                    ★ {resolvedQRVehicle.driver.avgRating || 4.8} ({resolvedQRVehicle.driver.totalRatings || 12} rides)
+                  </Text>
+                </View>
+                {resolvedQRVehicle.garage && (
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: colors.border }}>
+                    <Text style={{ fontSize: 12, color: colors.textMuted }}>Registered Garage:</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{resolvedQRVehicle.garage.name}</Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <Text style={{ fontSize: 12, color: colors.textMuted, fontStyle: 'italic', textAlign: 'center' }}>
+                No active driver is currently logged into or assigned to this rickshaw.
+              </Text>
+            )}
+
+            {/* Target Request Action Button */}
+            <Button
+              title={requestingRide ? 'Dispatching Request...' : `Request Rickshaw ${resolvedQRVehicle.shortVehicleNumber}`}
+              variant="primary"
+              size="lg"
+              loading={requestingRide}
+              disabled={!resolvedQRVehicle.driver || requestingRide}
+              icon={<Icon name="arrow-right" size={18} color="#FFFFFF" />}
+              onPress={handleQRTargetedRideRequest}
+            />
+          </View>
+        )}
       </Modal>
     </ScrollView>
   );

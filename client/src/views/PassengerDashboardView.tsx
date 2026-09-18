@@ -910,9 +910,12 @@ export const PassengerDashboardView: React.FC = () => {
 
                     <View style={styles.tripDetailCol}>
                       <Text style={[styles.tripDetailLabel, { color: colors.textMuted }]}>Fare & Settlement</Text>
-                      <Text style={[styles.tripDetailVal, { color: colors.primary }]}>
-                        ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Icon name={trip.paymentMethod === 'CASH' ? 'dollar-sign' : 'credit-card'} size={14} color={colors.primary} />
+                        <Text style={[styles.tripDetailVal, { color: colors.primary }]}>
+                          ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
+                        </Text>
+                      </View>
                     </View>
                   </View>
 
@@ -1046,7 +1049,10 @@ export const PassengerDashboardView: React.FC = () => {
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Payment Method:</Text>
-                  <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedTrip.paymentMethod || 'CASH'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Icon name={selectedTrip.paymentMethod === 'CASH' ? 'dollar-sign' : 'credit-card'} size={14} color={colors.primary} />
+                    <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedTrip.paymentMethod || 'CASH'}</Text>
+                  </View>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Settlement Status:</Text>

@@ -1849,9 +1849,12 @@ export const AdminDashboardView: React.FC = () => {
                             </View>
                             <View style={{ flex: 1, minWidth: 140 }}>
                               <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Fare Settlement</Text>
-                              <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '800' }}>
-                                ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
-                              </Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Icon name={trip.paymentMethod === 'CASH' ? 'dollar-sign' : 'credit-card'} size={14} color={colors.primary} />
+                                <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '800' }}>
+                                  ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
+                                </Text>
+                              </View>
                             </View>
                           </View>
 
@@ -2091,9 +2094,12 @@ export const AdminDashboardView: React.FC = () => {
                   <Text style={{ fontSize: 12, color: colors.textMuted }}>Platform Commission:</Text>
                   <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textMuted }}>৳{selectedTrip.settlement?.platformCommission || 0}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ fontSize: 12, color: colors.textMuted }}>Payment Method:</Text>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.paymentMethod || 'CASH'}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Icon name={selectedTrip.paymentMethod === 'CASH' ? 'dollar-sign' : 'credit-card'} size={14} color={colors.primary} />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.paymentMethod || 'CASH'}</Text>
+                  </View>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 12, color: colors.textMuted }}>Passenger Rating:</Text>

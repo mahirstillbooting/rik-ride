@@ -1045,9 +1045,12 @@ export const GarageDashboardView: React.FC = () => {
                       </View>
                       <View style={{ flex: 1, minWidth: 120 }}>
                         <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Fare / Settlement</Text>
-                        <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '800' }}>
-                          ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Icon name={trip.paymentMethod === 'CASH' ? 'dollar-sign' : 'credit-card'} size={14} color={colors.primary} />
+                          <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '800' }}>
+                            ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
+                          </Text>
+                        </View>
                       </View>
                     </View>
 

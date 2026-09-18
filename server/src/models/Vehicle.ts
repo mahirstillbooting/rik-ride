@@ -3,10 +3,20 @@ import { Schema, model, Document, Types } from 'mongoose';
 export type DriverOwnershipMode = 'GARAGE_REGISTERED' | 'SELF_OWNED';
 export type VehicleStatus = 'AVAILABLE' | 'ON_RIDE' | 'OFFLINE';
 export type VehicleVerificationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'SUSPENDED';
+export type QRStatus = 'ACTIVE' | 'REVOKED' | 'REPLACED' | 'DISABLED';
 
 export interface IGeoPoint {
   type: 'Point';
   coordinates: [number, number]; // [longitude, latitude]
+}
+
+export interface IQRHistoryItem {
+  token: string;
+  status: QRStatus;
+  createdAt: Date;
+  revokedAt?: Date;
+  replacedBy?: string;
+  reason?: string;
 }
 
 export interface IVehicle extends Document {
@@ -15,6 +25,8 @@ export interface IVehicle extends Document {
   shortVehicleNumber: string; // Short car/vehicle number (e.g. D-1024)
   registrationNumber: string; // Physical paper/plate registration number
   qrIdentifier: string; // Cryptographically signed token (HMAC) for QR generation
+  qrStatus: QRStatus; // QR Token lifecycle status
+  qrHistory?: IQRHistoryItem[]; // Historical list of revoked/replaced QR tokens
   ownershipType: DriverOwnershipMode;
   city?: string;
   cityCode?: string;
@@ -56,6 +68,22 @@ const VehicleSchema = new Schema<IVehicle>(
     },
     registrationNumber: { type: String, required: true, unique: true, index: true, uppercase: true, trim: true },
     qrIdentifier: { type: String, required: true, unique: true, index: true },
+    qrStatus: {
+      type: String,
+      enum: ['ACTIVE', 'REVOKED', 'REPLACED', 'DISABLED'],
+      default: 'ACTIVE',
+      index: true,
+    },
+    qrHistory: [
+      {
+        token: { type: String, required: true },
+        status: { type: String, enum: ['ACTIVE', 'REVOKED', 'REPLACED', 'DISABLED'], required: true },
+        createdAt: { type: Date, default: Date.now },
+        revokedAt: { type: Date },
+        replacedBy: { type: String },
+        reason: { type: String },
+      },
+    ],
     ownershipType: {
       type: String,
       enum: ['GARAGE_REGISTERED', 'SELF_OWNED'],

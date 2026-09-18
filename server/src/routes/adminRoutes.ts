@@ -653,4 +653,114 @@ router.get('/rides', async (_req: AuthenticatedRequest, res: Response): Promise<
   }
 });
 
+/**
+ * POST /api/admin/vehicles/:id/revoke-qr
+ * Admin endpoint to revoke a physical Rickshaw QR code (e.g. damaged, lost, or compromised)
+ */
+router.post('/vehicles/:id/revoke-qr', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const vehicle = await Vehicle.findById(id);
+    if (!vehicle) {
+      res.status(404).json({ error: 'Vehicle not found' });
+      return;
+    }
+
+    const currentToken = vehicle.qrIdentifier;
+    vehicle.qrStatus = 'REVOKED';
+
+    if (!vehicle.qrHistory) vehicle.qrHistory = [];
+    vehicle.qrHistory.push({
+      token: currentToken,
+      status: 'REVOKED',
+      createdAt: new Date(),
+      revokedAt: new Date(),
+      reason: reason || 'Administrative revocation',
+    });
+
+    await vehicle.save();
+
+    await auditService.logAction({
+      actorId: req.user!.id,
+      action: 'REVOKE_QR',
+      entity: 'VEHICLE',
+      entityId: vehicle._id.toString(),
+      metadata: { targetEntityName: vehicle.shortVehicleNumber, reason: reason || 'Admin revocation' },
+    });
+
+    res.json({
+      success: true,
+      message: `Rickshaw ${vehicle.shortVehicleNumber} QR code has been revoked.`,
+      vehicle: {
+        _id: vehicle._id,
+        vehicleId: vehicle.vehicleId,
+        shortVehicleNumber: vehicle.shortVehicleNumber,
+        qrStatus: vehicle.qrStatus,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to revoke QR code', details: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/vehicles/:id/replace-qr
+ * Admin endpoint to generate a new cryptographic QR code for a vehicle and archive the old token as REPLACED
+ */
+router.post('/vehicles/:id/replace-qr', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    const vehicle = await Vehicle.findById(id);
+    if (!vehicle) {
+      res.status(404).json({ error: 'Vehicle not found' });
+      return;
+    }
+
+    const oldToken = vehicle.qrIdentifier;
+    const { qrService } = await import('../services/qrService');
+    const newToken = qrService.generateSignedToken(vehicle.vehicleId || vehicle.shortVehicleNumber);
+
+    vehicle.qrIdentifier = newToken;
+    vehicle.qrStatus = 'ACTIVE';
+
+    if (!vehicle.qrHistory) vehicle.qrHistory = [];
+    vehicle.qrHistory.push({
+      token: oldToken,
+      status: 'REPLACED',
+      createdAt: new Date(),
+      revokedAt: new Date(),
+      replacedBy: newToken,
+      reason: reason || 'Admin QR replacement',
+    });
+
+    await vehicle.save();
+
+    await auditService.logAction({
+      actorId: req.user!.id,
+      action: 'REPLACE_QR',
+      entity: 'VEHICLE',
+      entityId: vehicle._id.toString(),
+      metadata: { targetEntityName: vehicle.shortVehicleNumber, previousToken: oldToken, newToken },
+    });
+
+    res.json({
+      success: true,
+      message: `Rickshaw ${vehicle.shortVehicleNumber} QR code successfully replaced with new cryptographic token.`,
+      vehicle: {
+        _id: vehicle._id,
+        vehicleId: vehicle.vehicleId,
+        shortVehicleNumber: vehicle.shortVehicleNumber,
+        qrIdentifier: vehicle.qrIdentifier,
+        qrStatus: vehicle.qrStatus,
+      },
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to replace QR code', details: error.message });
+  }
+});
+
 export default router;

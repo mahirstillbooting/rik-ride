@@ -22,6 +22,7 @@ export type IconName =
   | 'clock'
   | 'map-pin'
   | 'plus'
+  | 'minus'
   | 'chevron-right'
   | 'chevron-left'
   | 'chevron-down'
@@ -46,15 +47,33 @@ export type IconName =
   | 'key'
   | 'help-circle'
   | 'bar-chart'
+  | 'bar-chart-2'
   | 'location-outline'
   | 'layers'
   | 'edit'
+  | 'edit-2'
   | 'slash'
   | 'power'
   | 'user-check'
   | 'user-plus'
   | 'check-circle'
-  | 'activity';
+  | 'alert-circle'
+  | 'x-circle'
+  | 'activity'
+  | 'bell'
+  | 'wallet'
+  | 'credit-card'
+  | 'trash'
+  | 'trash-2'
+  | 'star'
+  | 'calendar'
+  | 'trending-up'
+  | 'camera'
+  | 'maximize'
+  | 'maximize-2'
+  | 'minimize'
+  | 'square'
+  | 'play';
 
 export interface IconProps {
   name: IconName | string;
@@ -63,74 +82,52 @@ export interface IconProps {
   style?: any;
 }
 
+// Semantic Alias Dictionary: maps non-standard or domain-specific names to standard Feather icons
+const SEMANTIC_ICON_MAP: Record<string, string> = {
+  notification: 'bell',
+  notifications: 'bell',
+  bell: 'bell',
+  delete: 'trash-2',
+  remove: 'trash-2',
+  trash: 'trash-2',
+  unlink: 'trash-2',
+  disconnect: 'trash-2',
+  wallet: 'credit-card',
+  payment: 'credit-card',
+  bkash: 'credit-card',
+  BKASH: 'credit-card',
+  nagad: 'credit-card',
+  NAGAD: 'credit-card',
+  mfs: 'credit-card',
+  OTHER_MFS: 'credit-card',
+  cash: 'dollar-sign',
+  CASH: 'dollar-sign',
+  card: 'credit-card',
+  CARD: 'credit-card',
+  rickshaw: 'truck',
+  vehicle: 'truck',
+  driver: 'user',
+  passenger: 'user',
+  garage: 'briefcase',
+  emergency: 'alert-triangle',
+  siren: 'alert-triangle',
+  circle: 'info', // STRICT RULE: Never render empty circle; map generic circle requests to info icon
+};
+
 export const Icon: React.FC<IconProps> = ({ name, size = 18, color, style }) => {
   const { colors } = useTheme();
   const iconColor = color || colors.textPrimary;
 
-  // Map icon names to Feather or Ionicons
-  switch (name) {
-    case 'grid':
-    case 'check-square':
-    case 'users':
-    case 'briefcase':
-    case 'navigation':
-    case 'truck':
-    case 'alert-triangle':
-    case 'shield':
-    case 'settings':
-    case 'sun':
-    case 'moon':
-    case 'log-out':
-    case 'search':
-    case 'filter':
-    case 'check':
-    case 'x':
-    case 'clock':
-    case 'map-pin':
-    case 'plus':
-    case 'minus':
-    case 'maximize':
-    case 'maximize-2':
-    case 'minimize':
-    case 'minimize-2':
-    case 'crosshair':
-    case 'target':
-    case 'chevron-right':
-    case 'chevron-left':
-    case 'chevron-down':
-    case 'chevron-up':
-    case 'lock':
-    case 'eye':
-    case 'eye-off':
-    case 'phone':
-    case 'mail':
-    case 'info':
-    case 'refresh-cw':
-    case 'arrow-right':
-    case 'wifi':
-    case 'zap':
-    case 'home':
-    case 'compass':
-    case 'heart':
-    case 'user':
-    case 'dollar-sign':
-    case 'file-text':
-    case 'radio':
-    case 'key':
-    case 'help-circle':
-    case 'bar-chart':
-    case 'layers':
-    case 'edit':
-    case 'slash':
-    case 'power':
-    case 'user-check':
-    case 'user-plus':
-    case 'check-circle':
-    case 'activity':
-      return <Feather name={name as any} size={size} color={iconColor} style={style} />;
-    case 'location-outline':
-      return <Ionicons name="location-outline" size={size} color={iconColor} style={style} />;
-    default:
-      return <Feather name="circle" size={size} color={iconColor} style={style} />;
+  // Resolve semantic alias if available
+  const resolvedName = SEMANTIC_ICON_MAP[name] || name;
+
+  // Special case: Ionicons
+  if (resolvedName === 'location-outline') {
+    return <Ionicons name="location-outline" size={size} color={iconColor} style={style} />;
   }
+
+  // Feather Icon fallback safety: If resolved name is an empty string or explicitly 'circle', map to 'info'
+  const featherName = resolvedName === 'circle' || !resolvedName ? 'info' : resolvedName;
+
+  return <Feather name={featherName as any} size={size} color={iconColor} style={style} />;
 };

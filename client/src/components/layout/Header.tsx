@@ -62,7 +62,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
         )}
 
         <View style={styles.brandContainer}>
-          <View style={[styles.brandDot, { backgroundColor: colors.primary }]} />
+          <Icon name="zap" size={16} color={colors.primary} />
           <Text style={[styles.brandText, { color: colors.primary }]}>RIK-RIDE</Text>
           <Text style={[styles.brandTag, { color: colors.textMuted }]}>
             {authState === 'authenticated' && user ? `${user.role}` : 'Platform Identity'}

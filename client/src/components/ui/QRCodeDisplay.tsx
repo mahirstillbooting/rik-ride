@@ -7,9 +7,9 @@ import { Icon } from './Icon';
 import { spacing, borderRadius } from '../../theme/spacing';
 
 export interface QRCodeDisplayProps {
-  qrToken: string;
-  vehicleId: string;
-  shortVehicleNumber: string;
+  qrToken?: string;
+  vehicleId?: string;
+  shortVehicleNumber?: string;
   registrationNumber?: string;
   qrStatus?: 'ACTIVE' | 'REVOKED' | 'REPLACED' | 'DISABLED' | string;
   size?: number;
@@ -31,7 +31,7 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
   const qrSvgHtml = useMemo(() => {
     try {
       const qr = qrcode(0, 'M');
-      qr.addData(qrToken || vehicleId);
+      qr.addData(qrToken || vehicleId || 'RR-V1-UNASSIGNED');
       qr.make();
       const count = qr.getModuleCount();
       const cellSize = Math.floor(size / count);

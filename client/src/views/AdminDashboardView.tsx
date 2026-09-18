@@ -25,6 +25,8 @@ import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { ErrorState } from '../components/ui/ErrorState';
 import { spacing, borderRadius } from '../theme/spacing';
+import { QRCodeDisplay } from '../components/ui/QRCodeDisplay';
+import { clientQRService } from '../services/qrService';
 import {
   adminService,
   AdminStats,
@@ -2413,6 +2415,61 @@ export const AdminDashboardView: React.FC = () => {
                   )}
                 </View>
               )}
+
+              {/* Section 5: Vehicle QR Identity & Admin Controls */}
+              <View style={{ padding: spacing.md, borderRadius: borderRadius.md, borderWidth: 1, backgroundColor: colors.surfaceElevated, borderColor: colors.border, gap: spacing.sm }}>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.primary }}>
+                  Vehicle QR Identity & Admin Controls
+                </Text>
+
+                <QRCodeDisplay
+                  qrToken={selectedVehicleDetail.qrIdentifier}
+                  vehicleId={selectedVehicleDetail.vehicleId || selectedVehicleDetail.shortVehicleNumber}
+                  shortVehicleNumber={selectedVehicleDetail.shortVehicleNumber}
+                  registrationNumber={selectedVehicleDetail.registrationNumber}
+                  qrStatus={selectedVehicleDetail.qrStatus}
+                />
+
+                <View style={{ flexDirection: 'row', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.xs }}>
+                  <Button
+                    title="Replace Damaged QR"
+                    variant="outline"
+                    size="sm"
+                    icon={<Icon name="refresh-cw" size={14} color={colors.primary} />}
+                    onPress={async () => {
+                      const targetId = selectedVehicleDetail._id || selectedVehicleDetail.vehicleId;
+                      if (!targetId) return;
+                      const res = await clientQRService.replaceVehicleQR(targetId);
+                      if (res.success && res.vehicle) {
+                        setSelectedVehicleDetail((prev) => prev ? { ...prev, qrIdentifier: res.vehicle.qrIdentifier, qrStatus: res.vehicle.qrStatus } : null);
+                        showToast(res.message || 'Vehicle QR code replaced with new secure token!', 'success');
+                      } else {
+                        showToast(res.error || 'Failed to replace vehicle QR code.', 'danger');
+                      }
+                    }}
+                  />
+
+                  {selectedVehicleDetail.qrStatus !== 'REVOKED' && (
+                    <Button
+                      title="Revoke QR Code"
+                      variant="danger"
+                      size="sm"
+                      icon={<Icon name="slash" size={14} color="#FFFFFF" />}
+                      onPress={async () => {
+                        const targetId = selectedVehicleDetail._id || selectedVehicleDetail.vehicleId;
+                        if (!targetId) return;
+                        const res = await clientQRService.revokeVehicleQR(targetId);
+                        if (res.success && res.vehicle) {
+                          setSelectedVehicleDetail((prev) => prev ? { ...prev, qrStatus: res.vehicle.qrStatus } : null);
+                          showToast(res.message || 'Vehicle QR code revoked!', 'warning');
+                        } else {
+                          showToast(res.error || 'Failed to revoke vehicle QR code.', 'danger');
+                        }
+                      }}
+                    />
+                  )}
+                </View>
+              </View>
             </View>
           </ScrollView>
         )}

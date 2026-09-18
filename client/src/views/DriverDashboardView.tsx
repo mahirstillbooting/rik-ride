@@ -22,6 +22,9 @@ import { ErrorState } from '../components/ui/ErrorState';
 import { Icon } from '../components/ui/Icon';
 import { RealMapContainer } from '../components/ui/RealMapContainer';
 import { spacing, borderRadius } from '../theme/spacing';
+import { RealQRScanner } from '../components/ui/RealQRScanner';
+import { clientQRService } from '../services/qrService';
+import { QRCodeDisplay } from '../components/ui/QRCodeDisplay';
 import {
   driverService,
   DriverProfileData,
@@ -92,6 +95,10 @@ export const DriverDashboardView: React.FC = () => {
   const [simAccuracy, setSimAccuracy] = useState('10');
   const [autoSimActive, setAutoSimActive] = useState(false);
 
+  // Driver QR Scanner States
+  const [showDriverQRScanner, setShowDriverQRScanner] = useState(false);
+  const [scanningVehicleQR, setScanningVehicleQR] = useState(false);
+
   // Tracking refs
   const watchIdRef = useRef<number | null>(null);
   const lastSentTsRef = useRef<number>(0);
@@ -130,6 +137,22 @@ export const DriverDashboardView: React.FC = () => {
 
     setLoading(false);
   }, []);
+
+  // Handle Driver Camera QR Scan Success
+  const handleDriverScanSuccess = async (qrPayload: string) => {
+    setShowDriverQRScanner(false);
+    setScanningVehicleQR(true);
+
+    const res = await clientQRService.driverConfirmScanQR(qrPayload);
+    setScanningVehicleQR(false);
+
+    if (res.success) {
+      showToast(res.message || 'Rickshaw QR code verified & confirmed for driver shift!', 'success');
+      loadDriverData();
+    } else {
+      showToast(res.error || 'Driver QR scan confirmation failed.', 'danger');
+    }
+  };
 
   // Fetch initial location status from backend
   const syncLocationStatus = useCallback(async () => {
@@ -655,6 +678,15 @@ export const DriverDashboardView: React.FC = () => {
                 onPress={handleStopSharing}
               />
             )}
+
+            <Button
+              title="Scan Rickshaw QR"
+              variant="outline"
+              size="md"
+              loading={scanningVehicleQR}
+              icon={<Icon name="qr-code" size={16} color={colors.primary} />}
+              onPress={() => setShowDriverQRScanner(true)}
+            />
 
             <TouchableOpacity
               style={[
@@ -1616,6 +1648,14 @@ export const DriverDashboardView: React.FC = () => {
           />
         </View>
       </Modal>
+
+      <RealQRScanner
+        visible={showDriverQRScanner}
+        onClose={() => setShowDriverQRScanner(false)}
+        onScanSuccess={handleDriverScanSuccess}
+        title="Scan Rickshaw Physical QR Code"
+        subtitle="Point camera at physical rickshaw QR code to confirm vehicle assignment for your shift."
+      />
     </View>
   );
 };

@@ -50,6 +50,7 @@ export interface GarageVehicle {
   status: 'AVAILABLE' | 'ON_RIDE' | 'OFFLINE';
   modelName?: string;
   manufacturingYear?: number;
+  qrStatus?: string;
   createdAt: string;
 }
 

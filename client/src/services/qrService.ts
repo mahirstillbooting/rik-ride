@@ -106,7 +106,7 @@ export const clientQRService = {
   /**
    * Admin QR Revocation Endpoint
    */
-  async revokeVehicleQR(vehicleId: string, reason?: string): Promise<{ success: boolean; message?: string; error?: string }> {
+  async revokeVehicleQR(vehicleId: string, reason?: string): Promise<{ success: boolean; message?: string; vehicle?: any; error?: string }> {
     try {
       return await authFetch(`/api/admin/vehicles/${vehicleId}/revoke-qr`, {
         method: 'POST',

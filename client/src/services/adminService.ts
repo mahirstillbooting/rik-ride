@@ -237,6 +237,8 @@ export interface VehicleDetailRecord {
     status: string;
     timestamp: string;
   } | null;
+  qrIdentifier?: string;
+  qrStatus?: string;
 }
 
 export interface PaginatedVehiclesResponse {

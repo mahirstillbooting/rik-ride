@@ -33,6 +33,7 @@ import {
 } from '../services/garageService';
 import { clientRideService, HistoricalTripSummary, DetailedTripRecord } from '../services/rideService';
 import { RealMapContainer } from '../components/ui/RealMapContainer';
+import { QRCodeDisplay } from '../components/ui/QRCodeDisplay';
 
 export const GarageDashboardView: React.FC = () => {
   const { colors } = useTheme();
@@ -767,11 +768,14 @@ export const GarageDashboardView: React.FC = () => {
                       </Text>
                     </View>
 
-                    <View style={styles.infoRow}>
-                      <Text style={[styles.infoLabel, { color: colors.textMuted }]}>QR Token:</Text>
-                      <Text style={[styles.qrCodeText, { color: colors.textSecondary }]} numberOfLines={1}>
-                        {veh.qrIdentifier.slice(0, 16)}...
-                      </Text>
+                    <View style={{ marginTop: spacing.xs }}>
+                      <QRCodeDisplay
+                        qrToken={veh.qrIdentifier}
+                        vehicleId={veh.vehicleId || veh.shortVehicleNumber}
+                        shortVehicleNumber={veh.shortVehicleNumber}
+                        registrationNumber={veh.registrationNumber}
+                        qrStatus={veh.qrStatus}
+                      />
                     </View>
                   </CardBody>
                   <CardFooter style={styles.vehicleFooter}>

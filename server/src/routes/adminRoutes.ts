@@ -543,6 +543,14 @@ router.post('/approval', async (req: AuthenticatedRequest, res: Response): Promi
       newStatus = action === 'APPROVE' ? 'ACTIVE' : action === 'REJECT' ? 'REJECTED' : 'SUSPENDED';
 
       user.accountStatus = newStatus as AccountStatus;
+      if (action === 'APPROVE') {
+        user.nidStatus = 'VERIFIED';
+        user.rejectionReason = undefined;
+      } else if (action === 'REJECT') {
+        user.nidStatus = 'REJECTED';
+        user.rejectionReason = reason || 'Identity information mismatch or invalid documents submitted.';
+        user.rejectionDate = new Date();
+      }
       await user.save();
       targetEntityName = `User: ${user.name} (${user.role})`;
     } else if (entityType === 'GARAGE') {
@@ -601,6 +609,131 @@ router.post('/approval', async (req: AuthenticatedRequest, res: Response): Promi
     });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to process approval action', details: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/applications/:id
+ * Retrieve comprehensive application detail bundle for dedicated Admin review
+ */
+router.get('/applications/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    // Check if ID matches User, Garage, or Vehicle
+    const user = await User.findById(id).select('-passwordHash').lean();
+    if (user) {
+      let garageInfo = null;
+      let vehicleInfo = null;
+
+      if (user.role === 'GARAGE_OWNER') {
+        garageInfo = await Garage.findOne({ ownerId: user._id }).lean();
+      } else if (user.role === 'DRIVER') {
+        vehicleInfo = await Vehicle.findOne({ assignedDriverId: user._id }).lean();
+        const gd = await GarageDriver.findOne({ driverId: user._id, status: 'ACTIVE' }).populate('garageId', 'name garageId phone').lean();
+        if (gd) (user as any).garageLink = gd.garageId;
+      }
+
+      const documents: { type: string; title: string; url: string }[] = [];
+      if (user.profileImage) documents.push({ type: 'PROFILE_PHOTO', title: 'Profile Photo', url: user.profileImage });
+      if (user.nidFrontDocumentRef) documents.push({ type: 'NID_FRONT', title: 'NID Document (Front)', url: user.nidFrontDocumentRef });
+      if (user.nidBackDocumentRef) documents.push({ type: 'NID_BACK', title: 'NID Document (Back)', url: user.nidBackDocumentRef });
+      if (user.nidDocumentRef && documents.length === 0) documents.push({ type: 'NID_DOCUMENT', title: 'NID Document Scan', url: user.nidDocumentRef });
+
+      res.json({
+        success: true,
+        application: {
+          id: user._id.toString(),
+          entityType: 'USER',
+          title: user.name,
+          role: user.role,
+          driverMode: user.driverMode,
+          accountStatus: user.accountStatus,
+          rejectionReason: user.rejectionReason,
+          applicant: {
+            id: user._id,
+            name: user.name,
+            phone: user.phone,
+            email: user.email,
+            profileImage: user.profileImage,
+            createdAt: user.createdAt,
+          },
+          identity: {
+            legalName: user.name,
+            dateOfBirth: user.dateOfBirth,
+            nidNumber: user.nidNumber,
+            nidStatus: user.nidStatus,
+            city: user.city,
+            area: user.area,
+            address: user.address,
+          },
+          documents,
+          roleInfo: {
+            garage: garageInfo,
+            vehicle: vehicleInfo,
+            garageLink: (user as any).garageLink,
+          },
+        },
+      });
+      return;
+    }
+
+    const garage = await Garage.findById(id).populate('ownerId', 'name phone email nidNumber accountStatus').lean();
+    if (garage) {
+      res.json({
+        success: true,
+        application: {
+          id: garage._id.toString(),
+          entityType: 'GARAGE',
+          title: garage.name,
+          garageId: garage.garageId,
+          verificationStatus: garage.verificationStatus,
+          applicant: garage.ownerId,
+          identity: {
+            legalName: (garage.ownerId as any)?.name,
+            phone: garage.phone,
+            address: garage.address,
+            city: garage.city,
+            area: garage.area,
+          },
+          documents: [],
+          roleInfo: {
+            capacity: garage.capacity,
+            garageId: garage.garageId,
+          },
+        },
+      });
+      return;
+    }
+
+    const vehicle = await Vehicle.findById(id).populate('assignedDriverId', 'name phone').populate('garageId', 'name garageId').lean();
+    if (vehicle) {
+      res.json({
+        success: true,
+        application: {
+          id: vehicle._id.toString(),
+          entityType: 'VEHICLE',
+          title: `Vehicle ${vehicle.shortVehicleNumber}`,
+          vehicleId: vehicle.vehicleId,
+          verificationStatus: vehicle.verificationStatus,
+          applicant: vehicle.assignedDriverId,
+          identity: {
+            registrationNumber: vehicle.registrationNumber,
+            ownershipType: vehicle.ownershipType,
+            modelName: vehicle.modelName,
+          },
+          documents: [],
+          roleInfo: {
+            garage: vehicle.garageId,
+          },
+        },
+      });
+      return;
+    }
+
+    res.status(404).json({ error: 'Application entity not found' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to fetch application details', details: error.message });
   }
 });
 

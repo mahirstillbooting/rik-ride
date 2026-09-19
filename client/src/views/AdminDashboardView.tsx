@@ -41,6 +41,8 @@ import {
 import { clientRideService, RideData, HistoricalTripSummary, DetailedTripRecord } from '../services/rideService';
 import { clientSafetyService, SafetyEventData } from '../services/safetyService';
 import { AdminAnalyticsView } from './AdminAnalyticsView';
+import { AdminApplicationDetailView } from './AdminApplicationDetailView';
+import { AdminSupportTicketsView } from './AdminSupportTicketsView';
 
 export const AdminDashboardView: React.FC = () => {
   const { colors, mode } = useTheme();
@@ -50,6 +52,9 @@ export const AdminDashboardView: React.FC = () => {
 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Dedicated Application Detail Review State
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null);
 
   // Admin Trip History States
   const [adminTripHistory, setAdminTripHistory] = useState<HistoricalTripSummary[]>([]);
@@ -507,6 +512,15 @@ export const AdminDashboardView: React.FC = () => {
 
         {loading ? (
           <LoadingState message="Connecting to MongoDB Atlas backend..." />
+        ) : selectedApplicationId ? (
+          <AdminApplicationDetailView
+            applicationId={selectedApplicationId}
+            onBack={() => setSelectedApplicationId(null)}
+            onActionComplete={() => {
+              setSelectedApplicationId(null);
+              loadDataForActiveTab();
+            }}
+          />
         ) : (
           <>
             {/* TAB 1: OVERVIEW */}
@@ -963,7 +977,14 @@ export const AdminDashboardView: React.FC = () => {
 
                           <View style={styles.actionRow}>
                             <Button
-                              title="Approve Entity"
+                              title="VIEW"
+                              variant="outline"
+                              size="sm"
+                              icon={<Icon name="eye" size={14} color={colors.primary} />}
+                              onPress={() => setSelectedApplicationId(item.id)}
+                            />
+                            <Button
+                              title="Approve"
                               variant="primary"
                               size="sm"
                               icon={<Icon name="check" size={14} color={colors.primaryForeground} />}
@@ -974,16 +995,9 @@ export const AdminDashboardView: React.FC = () => {
                               title="Reject"
                               variant="outline"
                               size="sm"
-                              icon={<Icon name="x" size={14} color={colors.textPrimary} />}
+                              icon={<Icon name="x" size={14} color={colors.danger} />}
                               disabled={actionLoadingId === item.id}
                               onPress={() => handleApprovalAction(item.entityType, item.id, 'REJECT')}
-                            />
-                            <Button
-                              title="Suspend"
-                              variant="danger"
-                              size="sm"
-                              disabled={actionLoadingId === item.id}
-                              onPress={() => handleApprovalAction(item.entityType, item.id, 'SUSPEND')}
                             />
                           </View>
                         </CardBody>
@@ -1937,6 +1951,13 @@ export const AdminDashboardView: React.FC = () => {
             {currentNavItem.id === 'admin-analytics' && (
               <View style={styles.viewSection}>
                 <AdminAnalyticsView />
+              </View>
+            )}
+
+            {/* TAB 11: SUPPORT TICKETS */}
+            {currentNavItem.id === 'admin-tickets' && (
+              <View style={styles.viewSection}>
+                <AdminSupportTicketsView />
               </View>
             )}
           </>

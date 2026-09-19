@@ -1,4 +1,5 @@
 import { env } from '../config/env';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface AuthApiResponse<T = any> {
   success: boolean;
@@ -85,6 +86,26 @@ export const authApiService = {
       const res = await fetch(`${env.apiUrl}/api/auth/register/verify-and-create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      return await res.json();
+    } catch (e: any) {
+      return { success: false, error: 'Network error or backend server unreachable' };
+    }
+  },
+
+  /**
+   * Update profile endpoint
+   */
+  async updateProfile(payload: Record<string, any>): Promise<AuthApiResponse> {
+    try {
+      const token = await AsyncStorage.getItem('auth_token');
+      const res = await fetch(`${env.apiUrl}/api/auth/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(payload),
       });
       return await res.json();

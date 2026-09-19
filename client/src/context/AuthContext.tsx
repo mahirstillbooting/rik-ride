@@ -20,6 +20,18 @@ export interface UserProfile {
   role: UserRole;
   driverMode?: DriverOperatingMode;
   accountStatus: 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED' | 'DISABLED';
+  nidNumber?: string;
+  dateOfBirth?: string;
+  nidStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  city?: string;
+  cityCode?: string;
+  area?: string;
+  address?: string;
+  profileImage?: string;
+  rejectionReason?: string;
+  rejectionDate?: string;
+  nidFrontDocumentRef?: string;
+  nidBackDocumentRef?: string;
 }
 
 interface AuthContextType {
@@ -29,6 +41,7 @@ interface AuthContextType {
   login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   seedDevAccounts: () => Promise<{ success: boolean; defaultPassword?: string }>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -64,54 +77,69 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setAuthState('unauthenticated');
       }
     } catch (e) {
-      console.error('[AuthContext] Restore session error:', e);
+      console.error('[AuthContext] Session restore error:', e);
       setAuthState('unauthenticated');
+    }
+  };
+
+  const refreshUser = async () => {
+    try {
+      const savedToken = token || (await AuthStorage.getToken());
+      if (!savedToken) return;
+
+      const res = await fetch(`${env.apiUrl}/api/auth/me`, {
+        headers: {
+          Authorization: `Bearer ${savedToken}`,
+        },
+      });
+      const data = await res.json();
+      if (data.success && data.user) {
+        const u = data.user as UserProfile;
+        setUser(u);
+        await AuthStorage.saveUser(u as any);
+      }
+    } catch (e) {
+      console.error('[AuthContext] refreshUser error:', e);
     }
   };
 
   const login = async (identifier: string, password: string) => {
     try {
-      const response = await fetch(`${env.apiUrl}/api/auth/login`, {
+      setAuthState('loading');
+      const res = await fetch(`${env.apiUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier, password }),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (!response.ok || !data.success) {
-        if (data.accountStatus === 'PENDING') {
-          setAuthState('pending_approval');
-        } else if (data.accountStatus === 'SUSPENDED') {
-          setAuthState('account_suspended');
-        } else if (data.accountStatus === 'DISABLED' || data.accountStatus === 'REJECTED') {
-          setAuthState('account_disabled');
-        }
+      if (!data.success || !data.token || !data.user) {
+        setAuthState('unauthenticated');
         return { success: false, error: data.error || 'Authentication failed' };
       }
 
-      const authToken = data.token;
-      const userProfile: UserProfile = {
-        id: data.user._id || data.user.id,
-        phone: data.user.phone,
-        name: data.user.name,
-        email: data.user.email,
-        role: data.user.role,
-        driverMode: data.user.driverMode,
-        accountStatus: data.user.accountStatus,
-      };
+      const u = data.user as UserProfile;
+      await AuthStorage.saveToken(data.token);
+      await AuthStorage.saveUser(u as any);
 
-      await AuthStorage.saveToken(authToken);
-      await AuthStorage.saveUser(userProfile as unknown as Record<string, unknown>);
+      setToken(data.token);
+      setUser(u);
 
-      setToken(authToken);
-      setUser(userProfile);
-      setAuthState('authenticated');
+      if (u.accountStatus === 'PENDING') {
+        setAuthState('pending_approval');
+      } else if (u.accountStatus === 'SUSPENDED') {
+        setAuthState('account_suspended');
+      } else if (u.accountStatus === 'DISABLED' || u.accountStatus === 'REJECTED') {
+        setAuthState('account_disabled');
+      } else {
+        setAuthState('authenticated');
+      }
 
       return { success: true };
     } catch (e) {
-      console.error('[AuthContext] Login fetch error:', e);
-      return { success: false, error: 'Network error or backend unreachable' };
+      setAuthState('unauthenticated');
+      return { success: false, error: 'Network error connecting to auth server' };
     }
   };
 
@@ -120,23 +148,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (user?.role === 'DRIVER') {
         await locationApiService.stopSharing();
       }
-    } catch {}
-    await AuthStorage.clearSession();
-    setToken(null);
-    setUser(null);
-    setAuthState('unauthenticated');
+    } catch (e) {
+      console.warn('[AuthContext] Error stopping location tracking during logout:', e);
+    } finally {
+      await AuthStorage.clearSession();
+      setToken(null);
+      setUser(null);
+      setAuthState('unauthenticated');
+    }
   };
 
   const seedDevAccounts = async () => {
     try {
-      const response = await fetch(`${env.apiUrl}/api/auth/seed-dev`, {
+      const res = await fetch(`${env.apiUrl}/api/auth/seed-dev`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      const data = await response.json();
-      return { success: data.success, defaultPassword: data.defaultPassword };
+      const data = await res.json();
+      if (!data.success) {
+        return { success: false, error: data.error };
+      }
+      return { success: true, defaultPassword: data.defaultPassword };
     } catch (e) {
-      return { success: false };
+      return { success: false, error: 'Network error trying to seed dev accounts' };
     }
   };
 
@@ -149,6 +183,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         login,
         logout,
         seedDevAccounts,
+        refreshUser,
       }}
     >
       {children}

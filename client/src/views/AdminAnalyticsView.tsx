@@ -9,6 +9,7 @@ import { Badge } from '../components/ui/Badge';
 import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Icon } from '../components/ui/Icon';
+import { BkashIcon } from '../components/ui/BkashIcon';
 import { spacing, borderRadius } from '../theme/spacing';
 import {
   clientAnalyticsService,
@@ -351,11 +352,15 @@ export const AdminAnalyticsView: React.FC = () => {
                     return (
                       <View key={method} style={[styles.paymentMethodRow, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Icon
-                            name={isCash ? 'dollar-sign' : 'credit-card'}
-                            size={16}
-                            color={iconColor}
-                          />
+                          {isBkash ? (
+                            <BkashIcon size={18} />
+                          ) : (
+                            <Icon
+                              name={isCash ? 'dollar-sign' : 'credit-card'}
+                              size={16}
+                              color={iconColor}
+                            />
+                          )}
                           <View>
                             <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{methodLabel}</Text>
                             <Text style={{ fontSize: 10, color: colors.textMuted }}>{method}</Text>

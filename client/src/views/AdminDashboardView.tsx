@@ -27,6 +27,7 @@ import { ErrorState } from '../components/ui/ErrorState';
 import { spacing, borderRadius } from '../theme/spacing';
 import { QRCodeDisplay } from '../components/ui/QRCodeDisplay';
 import { clientQRService } from '../services/qrService';
+import { PaymentMethodBadge } from '../components/ui/PaymentMethodBadge';
 import {
   adminService,
   AdminStats,
@@ -1851,11 +1852,9 @@ export const AdminDashboardView: React.FC = () => {
                             </View>
                             <View style={{ flex: 1, minWidth: 140 }}>
                               <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Fare Settlement</Text>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Icon name={trip.paymentMethod === 'CASH' ? 'dollar-sign' : 'credit-card'} size={14} color={colors.primary} />
-                                <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '800' }}>
-                                  ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
-                                </Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '800' }}>৳{trip.fareAmount || 0}</Text>
+                                <PaymentMethodBadge method={trip.paymentMethod || 'CASH'} />
                               </View>
                             </View>
                           </View>
@@ -2098,10 +2097,7 @@ export const AdminDashboardView: React.FC = () => {
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ fontSize: 12, color: colors.textMuted }}>Payment Method:</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Icon name={selectedTrip.paymentMethod === 'CASH' ? 'dollar-sign' : 'credit-card'} size={14} color={colors.primary} />
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: colors.textPrimary }}>{selectedTrip.paymentMethod || 'CASH'}</Text>
-                  </View>
+                  <PaymentMethodBadge method={selectedTrip.paymentMethod || 'CASH'} size="md" />
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 12, color: colors.textMuted }}>Passenger Rating:</Text>

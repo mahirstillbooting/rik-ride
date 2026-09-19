@@ -20,6 +20,7 @@ import { clientRideService, RideData, HistoricalTripSummary, DetailedTripRecord 
 import { clientSafetyService } from '../services/safetyService';
 import { RealQRScanner } from '../components/ui/RealQRScanner';
 import { clientQRService, ResolvedQRVehicleData } from '../services/qrService';
+import { PaymentMethodBadge } from '../components/ui/PaymentMethodBadge';
 
 export const PassengerDashboardView: React.FC = () => {
   const { colors } = useTheme();
@@ -978,11 +979,9 @@ export const PassengerDashboardView: React.FC = () => {
 
                     <View style={styles.tripDetailCol}>
                       <Text style={[styles.tripDetailLabel, { color: colors.textMuted }]}>Fare & Settlement</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Icon name={trip.paymentMethod === 'CASH' ? 'dollar-sign' : 'credit-card'} size={14} color={colors.primary} />
-                        <Text style={[styles.tripDetailVal, { color: colors.primary }]}>
-                          ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
-                        </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.tripDetailVal, { color: colors.primary, fontWeight: '800' }]}>৳{trip.fareAmount || 0}</Text>
+                        <PaymentMethodBadge method={trip.paymentMethod || 'CASH'} />
                       </View>
                     </View>
                   </View>
@@ -1117,10 +1116,7 @@ export const PassengerDashboardView: React.FC = () => {
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Payment Method:</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Icon name={selectedTrip.paymentMethod === 'CASH' ? 'dollar-sign' : 'credit-card'} size={14} color={colors.primary} />
-                    <Text style={[styles.detailVal, { color: colors.textPrimary }]}>{selectedTrip.paymentMethod || 'CASH'}</Text>
-                  </View>
+                  <PaymentMethodBadge method={selectedTrip.paymentMethod || 'CASH'} size="md" />
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Settlement Status:</Text>

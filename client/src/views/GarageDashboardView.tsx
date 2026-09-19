@@ -34,6 +34,7 @@ import {
 import { clientRideService, HistoricalTripSummary, DetailedTripRecord } from '../services/rideService';
 import { RealMapContainer } from '../components/ui/RealMapContainer';
 import { QRCodeDisplay } from '../components/ui/QRCodeDisplay';
+import { PaymentMethodBadge } from '../components/ui/PaymentMethodBadge';
 
 export const GarageDashboardView: React.FC = () => {
   const { colors } = useTheme();
@@ -1049,11 +1050,9 @@ export const GarageDashboardView: React.FC = () => {
                       </View>
                       <View style={{ flex: 1, minWidth: 120 }}>
                         <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '600' }}>Fare / Settlement</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Icon name={trip.paymentMethod === 'CASH' ? 'dollar-sign' : 'credit-card'} size={14} color={colors.primary} />
-                          <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '800' }}>
-                            ৳{trip.fareAmount || 0} ({trip.paymentMethod || 'CASH'})
-                          </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '800' }}>৳{trip.fareAmount || 0}</Text>
+                          <PaymentMethodBadge method={trip.paymentMethod || 'CASH'} />
                         </View>
                       </View>
                     </View>

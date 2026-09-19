@@ -16,8 +16,11 @@ export interface IUser extends Document {
   
   // Mandatory NID & Identity Fields
   nidNumber?: string;
+  dateOfBirth?: Date | string;
   nidStatus?: NidStatus;
   nidDocumentRef?: string;
+  nidFrontDocumentRef?: string;
+  nidBackDocumentRef?: string;
   city?: string;
   cityCode?: string;
   area?: string;
@@ -25,6 +28,8 @@ export interface IUser extends Document {
   isIdentityProtected?: boolean;
 
   profileImage?: string;
+  rejectionReason?: string;
+  rejectionDate?: Date;
   lastLoginAt?: Date;
   metadata?: Record<string, unknown>;
   createdAt: Date;
@@ -58,6 +63,7 @@ const UserSchema = new Schema<IUser>(
 
     // Mandatory NID & Identity Fields
     nidNumber: { type: String, trim: true, sparse: true, index: true },
+    dateOfBirth: { type: Schema.Types.Mixed },
     nidStatus: {
       type: String,
       enum: ['PENDING', 'VERIFIED', 'REJECTED'],
@@ -65,6 +71,8 @@ const UserSchema = new Schema<IUser>(
       index: true,
     },
     nidDocumentRef: { type: String },
+    nidFrontDocumentRef: { type: String },
+    nidBackDocumentRef: { type: String },
     city: { type: String, default: 'Dhaka', trim: true },
     cityCode: { type: String, default: 'DH', uppercase: true, trim: true },
     area: { type: String, trim: true },
@@ -72,6 +80,8 @@ const UserSchema = new Schema<IUser>(
     isIdentityProtected: { type: Boolean, default: true },
 
     profileImage: { type: String },
+    rejectionReason: { type: String, trim: true },
+    rejectionDate: { type: Date },
     lastLoginAt: { type: Date },
     metadata: { type: Schema.Types.Mixed },
   },

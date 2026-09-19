@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import { createServer } from 'http';
 import { env, validateEnv } from './config/env';
 import { connectDatabase } from './config/db';
@@ -16,6 +17,8 @@ import safetyRoutes from './routes/safetyRoutes';
 import analyticsRoutes from './routes/analyticsRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import qrRoutes from './routes/qrRoutes';
+import uploadRoutes from './routes/uploadRoutes';
+import supportTicketRoutes from './routes/supportTicketRoutes';
 
 validateEnv();
 
@@ -23,7 +26,12 @@ const app = express();
 const PORT = env.port;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Serve Uploads Directory statically
+const uploadsDir = path.join(__dirname, '../uploads');
+app.use('/uploads', express.static(uploadsDir));
 
 // Register API Routes
 app.use('/api/auth', authRoutes);
@@ -37,6 +45,8 @@ app.use('/api/ride', rideRoutes);
 app.use('/api/safety', safetyRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/qr', qrRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/support-tickets', supportTicketRoutes);
 
 // Health & Verification Endpoint
 app.get('/api/health', (_req, res) => {

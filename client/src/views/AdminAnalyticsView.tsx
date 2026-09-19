@@ -10,6 +10,7 @@ import { LoadingState } from '../components/ui/LoadingState';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Icon } from '../components/ui/Icon';
 import { BkashIcon } from '../components/ui/BkashIcon';
+import { NagadIcon } from '../components/ui/NagadIcon';
 import { spacing, borderRadius } from '../theme/spacing';
 import {
   clientAnalyticsService,
@@ -354,6 +355,8 @@ export const AdminAnalyticsView: React.FC = () => {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                           {isBkash ? (
                             <BkashIcon size={18} />
+                          ) : isNagad ? (
+                            <NagadIcon size={18} />
                           ) : (
                             <Icon
                               name={isCash ? 'dollar-sign' : 'credit-card'}

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authService } from '../services/authService';
+import { otpService } from '../services/otpService';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
 import { User, UserRole, DriverOperatingMode, AccountStatus } from '../models/User';
 import { env } from '../config/env';
@@ -102,6 +103,302 @@ router.put('/profile', requireAuth, async (req: AuthenticatedRequest, res: Respo
     });
   } catch (error: any) {
     res.status(500).json({ error: 'Failed to update profile details', details: error.message });
+  }
+});
+
+/**
+ * POST /api/auth/forgot-password/request-otp
+ * Dispatches secure 6-digit OTP for password reset.
+ */
+router.post('/forgot-password/request-otp', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      res.status(400).json({ success: false, error: 'Please provide a valid registered email address.' });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: cleanEmail });
+
+    // Safe generic response to prevent account enumeration
+    if (!user) {
+      res.json({
+        success: true,
+        message: 'If an account exists for this email address, a verification OTP code has been sent.',
+        cooldownSeconds: 60,
+      });
+      return;
+    }
+
+    const result = await otpService.createAndSendOtp(cleanEmail, 'FORGOT_PASSWORD', user.name);
+    if (!result.success) {
+      res.status(result.cooldownSeconds ? 429 : 400).json(result);
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Verification OTP sent to your registered email address.',
+      cooldownSeconds: result.cooldownSeconds || 60,
+    });
+  } catch (error: any) {
+    console.error('[AuthRoutes] Request OTP error:', error);
+    res.status(500).json({ success: false, error: 'Failed to dispatch password reset OTP.' });
+  }
+});
+
+/**
+ * POST /api/auth/forgot-password/verify-otp
+ * Verifies 6-digit numeric OTP and returns a single-use reset token.
+ */
+router.post('/forgot-password/verify-otp', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) {
+      res.status(400).json({ success: false, error: 'Email and 6-digit OTP code are required.' });
+      return;
+    }
+
+    const result = await otpService.verifyOtp(email, otp, 'FORGOT_PASSWORD');
+    if (!result.success) {
+      res.status(400).json(result);
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'OTP verified successfully.',
+      resetToken: result.resetToken,
+    });
+  } catch (error: any) {
+    console.error('[AuthRoutes] Verify OTP error:', error);
+    res.status(500).json({ success: false, error: 'Failed to verify OTP code.' });
+  }
+});
+
+/**
+ * POST /api/auth/forgot-password/reset-password
+ * Resets user password using the single-use reset token.
+ */
+router.post('/forgot-password/reset-password', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, resetToken, newPassword } = req.body;
+    if (!email || !resetToken || !newPassword) {
+      res.status(400).json({ success: false, error: 'Email, reset token, and new password are required.' });
+      return;
+    }
+
+    const isValidToken = await otpService.validateAndConsumeResetToken(email, resetToken);
+    if (!isValidToken) {
+      res.status(400).json({ success: false, error: 'Invalid or expired password reset session. Please request a new OTP.' });
+      return;
+    }
+
+    const result = await authService.resetPassword(email, newPassword);
+    if (!result.success) {
+      res.status(400).json(result);
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Your password has been reset successfully. You may now sign in with your new password.',
+    });
+  } catch (error: any) {
+    console.error('[AuthRoutes] Reset password error:', error);
+    res.status(500).json({ success: false, error: 'Failed to reset password.' });
+  }
+});
+
+/**
+ * POST /api/auth/register/request-otp
+ * Dispatches email verification OTP for role onboarding.
+ */
+router.post('/register/request-otp', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, phone, role } = req.body;
+
+    // Strict server-side role check: Public signup prohibits ADMIN role
+    if (role === 'ADMIN') {
+      res.status(403).json({ success: false, error: 'Public registration for System Administrator role is strictly prohibited.' });
+      return;
+    }
+
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
+      return;
+    }
+
+    if (!phone || phone.trim().length < 10) {
+      res.status(400).json({ success: false, error: 'Please enter a valid phone number.' });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = phone.trim();
+
+    // Check if phone or email is already registered
+    const existingUser = await User.findOne({
+      $or: [{ email: cleanEmail }, { phone: cleanPhone }],
+    });
+
+    if (existingUser) {
+      if (existingUser.email === cleanEmail) {
+        res.status(400).json({ success: false, error: 'An account with this email address is already registered.' });
+      } else {
+        res.status(400).json({ success: false, error: 'An account with this phone number is already registered.' });
+      }
+      return;
+    }
+
+    const result = await otpService.createAndSendOtp(cleanEmail, 'EMAIL_VERIFICATION');
+    if (!result.success) {
+      res.status(result.cooldownSeconds ? 429 : 400).json(result);
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Email verification OTP sent successfully.',
+      cooldownSeconds: result.cooldownSeconds || 60,
+    });
+  } catch (error: any) {
+    console.error('[AuthRoutes] Register request OTP error:', error);
+    res.status(500).json({ success: false, error: 'Failed to send registration OTP.' });
+  }
+});
+
+/**
+ * POST /api/auth/register/verify-and-create
+ * Verifies email OTP and completes role-based user onboarding.
+ */
+router.post('/register/verify-and-create', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const {
+      email,
+      otp,
+      phone,
+      name,
+      password,
+      role,
+      driverMode,
+      nidNumber,
+      city,
+      area,
+      address,
+      garageName,
+      garageAddress,
+      garageCapacity,
+    } = req.body;
+
+    // Strict server-side role check: Public signup prohibits ADMIN role
+    if (role === 'ADMIN') {
+      res.status(403).json({ success: false, error: 'Public registration for System Administrator role is strictly prohibited.' });
+      return;
+    }
+
+    if (!['PASSENGER', 'GARAGE_OWNER', 'DRIVER'].includes(role)) {
+      res.status(400).json({ success: false, error: 'Invalid registration role specified.' });
+      return;
+    }
+
+    if (!name || !phone || !email || !password || !otp) {
+      res.status(400).json({ success: false, error: 'Name, phone, email, password, and OTP code are required.' });
+      return;
+    }
+
+    if (password.length < 8) {
+      res.status(400).json({ success: false, error: 'Password must be at least 8 characters long.' });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPhone = phone.trim();
+
+    // Verify Email OTP
+    const otpResult = await otpService.verifyOtp(cleanEmail, otp, 'EMAIL_VERIFICATION');
+    if (!otpResult.success) {
+      res.status(400).json(otpResult);
+      return;
+    }
+
+    // Double-check user uniqueness
+    const existing = await User.findOne({
+      $or: [{ email: cleanEmail }, { phone: cleanPhone }],
+    });
+    if (existing) {
+      res.status(400).json({ success: false, error: 'Phone number or email is already registered.' });
+      return;
+    }
+
+    // Determine operational account status: PASSENGER -> ACTIVE, DRIVER/GARAGE_OWNER -> PENDING
+    let accountStatus: AccountStatus = 'ACTIVE';
+    if (role === 'GARAGE_OWNER' || role === 'DRIVER') {
+      accountStatus = 'PENDING';
+    }
+
+    const passwordHash = await authService.hashPassword(password);
+
+    const newUser = await User.create({
+      name: name.trim(),
+      phone: cleanPhone,
+      email: cleanEmail,
+      passwordHash,
+      role: role as UserRole,
+      driverMode: role === 'DRIVER' ? (driverMode as DriverOperatingMode) || 'SELF_OWNED' : undefined,
+      accountStatus,
+      nidNumber: nidNumber ? nidNumber.trim() : undefined,
+      nidStatus: nidNumber ? 'PENDING' : undefined,
+      city: city || 'Dhaka',
+      area: area ? area.trim() : undefined,
+      address: address ? address.trim() : undefined,
+      isIdentityProtected: true,
+    });
+
+    // If registering as Garage Owner, create Garage application record
+    if (role === 'GARAGE_OWNER') {
+      const { Garage } = await import('../models/Garage');
+      const { generateGarageId } = await import('../services/idGeneratorService');
+      const { garageId: garageCustomId } = await generateGarageId(city || 'Dhaka');
+
+      await Garage.create({
+        garageId: garageCustomId,
+        ownerId: newUser._id,
+        name: garageName ? garageName.trim() : `${name.trim()}'s Rickshaw Garage`,
+        city: city || 'Dhaka',
+        cityCode: 'DH',
+        area: area ? area.trim() : 'Dhaka Central',
+        address: garageAddress ? garageAddress.trim() : (address ? address.trim() : 'Dhaka, Bangladesh'),
+        phone: cleanPhone,
+        verificationStatus: 'PENDING',
+        capacity: Number(garageCapacity) || 10,
+      });
+    }
+
+    if (accountStatus === 'ACTIVE') {
+      const token = authService.generateToken(newUser);
+      res.json({
+        success: true,
+        message: 'Account created successfully!',
+        token,
+        user: newUser.toAuthJSON(),
+        accountStatus: 'ACTIVE',
+      });
+    } else {
+      res.json({
+        success: true,
+        message:
+          role === 'GARAGE_OWNER'
+            ? 'Garage Owner application submitted successfully! Your account is pending operational approval by System Administrator.'
+            : 'Driver registration submitted successfully! Your account is pending operational approval by System Administrator.',
+        accountStatus: 'PENDING',
+        user: newUser.toAuthJSON(),
+      });
+    }
+  } catch (error: any) {
+    console.error('[AuthRoutes] Register verify and create error:', error);
+    res.status(500).json({ success: false, error: 'Failed to complete account registration.' });
   }
 });
 

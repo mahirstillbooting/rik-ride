@@ -120,6 +120,35 @@ export class AuthService {
       accountStatus: user.accountStatus,
     };
   }
+
+  /**
+   * Resets user password after OTP validation.
+   */
+  public async resetPassword(email: string, newPassword: string): Promise<AuthResult> {
+    if (!email || !newPassword) {
+      return { success: false, error: 'Email and new password are required' };
+    }
+
+    if (newPassword.length < 8) {
+      return { success: false, error: 'Password must be at least 8 characters long' };
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: cleanEmail }).select('+passwordHash');
+
+    if (!user) {
+      return { success: false, error: 'Account not found for the specified email address' };
+    }
+
+    user.passwordHash = await this.hashPassword(newPassword);
+    user.updatedAt = new Date();
+    await user.save();
+
+    return {
+      success: true,
+      user: user.toAuthJSON(),
+    };
+  }
 }
 
 export const authService = new AuthService();

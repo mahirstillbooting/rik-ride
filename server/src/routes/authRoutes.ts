@@ -40,6 +40,26 @@ router.get('/me', requireAuth, (req: AuthenticatedRequest, res: Response): void 
 });
 
 /**
+ * POST /api/auth/logout
+ * Logs out user and turns off active driver location status if user is a DRIVER.
+ */
+router.post('/logout', requireAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (req.user && req.user.role === 'DRIVER') {
+      const { locationService } = await import('../services/locationService');
+      await locationService.stopLocation(req.user.id);
+    }
+
+    res.json({
+      success: true,
+      message: 'Logged out successfully.',
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: 'Logout cleanup error', details: error.message });
+  }
+});
+
+/**
  * PUT /api/auth/profile
  * Update user profile details. Enforces immutability on protected identity fields (name & nidNumber).
  */

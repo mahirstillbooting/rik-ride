@@ -1064,11 +1064,19 @@ export const AdminDashboardView: React.FC = () => {
                         </View>
 
                         <View style={styles.actionRow}>
+                          <Button
+                            title="VIEW"
+                            variant="outline"
+                            size="sm"
+                            icon={<Icon name="eye" size={14} color={colors.primary} />}
+                            onPress={() => setSelectedApplicationId(u._id)}
+                          />
                           {u.accountStatus !== 'ACTIVE' && (
                             <Button
                               title="Activate User"
                               variant="primary"
                               size="sm"
+                              icon={<Icon name="check" size={14} color={colors.primaryForeground} />}
                               onPress={() => handleApprovalAction('USER', u._id, 'APPROVE')}
                             />
                           )}
@@ -1077,6 +1085,7 @@ export const AdminDashboardView: React.FC = () => {
                               title="Suspend Account"
                               variant="danger"
                               size="sm"
+                              icon={<Icon name="x" size={14} color="#FFFFFF" />}
                               onPress={() => handleApprovalAction('USER', u._id, 'SUSPEND')}
                             />
                           )}
@@ -1115,21 +1124,31 @@ export const AdminDashboardView: React.FC = () => {
 
                         <View style={styles.actionRow}>
                           <Button
+                            title="VIEW"
+                            variant="outline"
+                            size="sm"
+                            icon={<Icon name="eye" size={14} color={colors.primary} />}
+                            onPress={() => setSelectedApplicationId(g._id)}
+                          />
+                          <Button
                             title="Approve Garage"
                             variant="primary"
                             size="sm"
+                            icon={<Icon name="check" size={14} color={colors.primaryForeground} />}
                             onPress={() => handleApprovalAction('GARAGE', g._id, 'APPROVE')}
                           />
                           <Button
                             title="Reject"
                             variant="outline"
                             size="sm"
+                            icon={<Icon name="x" size={14} color={colors.danger} />}
                             onPress={() => handleApprovalAction('GARAGE', g._id, 'REJECT')}
                           />
                           <Button
                             title="Suspend"
                             variant="danger"
                             size="sm"
+                            icon={<Icon name="trash-2" size={14} color="#FFFFFF" />}
                             onPress={() => handleApprovalAction('GARAGE', g._id, 'SUSPEND')}
                           />
                         </View>
@@ -1167,15 +1186,24 @@ export const AdminDashboardView: React.FC = () => {
 
                         <View style={styles.actionRow}>
                           <Button
+                            title="VIEW"
+                            variant="outline"
+                            size="sm"
+                            icon={<Icon name="eye" size={14} color={colors.primary} />}
+                            onPress={() => setSelectedApplicationId(d._id)}
+                          />
+                          <Button
                             title="Approve Driver"
                             variant="primary"
                             size="sm"
+                            icon={<Icon name="check" size={14} color={colors.primaryForeground} />}
                             onPress={() => handleApprovalAction('USER', d._id, 'APPROVE')}
                           />
                           <Button
                             title="Suspend"
                             variant="danger"
                             size="sm"
+                            icon={<Icon name="x" size={14} color="#FFFFFF" />}
                             onPress={() => handleApprovalAction('USER', d._id, 'SUSPEND')}
                           />
                         </View>
@@ -1416,6 +1444,13 @@ export const AdminDashboardView: React.FC = () => {
                                   {/* Semantic Action Controls Bar */}
                                   <View style={styles.actionRow}>
                                     <Button
+                                      title="VIEW"
+                                      variant="outline"
+                                      size="sm"
+                                      icon={<Icon name="eye" size={14} color={colors.primary} />}
+                                      onPress={() => setSelectedApplicationId(v._id)}
+                                    />
+                                    <Button
                                       title="Inspect Details"
                                       variant="primary"
                                       size="sm"
@@ -1547,6 +1582,13 @@ export const AdminDashboardView: React.FC = () => {
 
                               {/* Semantic Action Controls Bar */}
                               <View style={styles.actionRow}>
+                                <Button
+                                  title="VIEW"
+                                  variant="outline"
+                                  size="sm"
+                                  icon={<Icon name="eye" size={14} color={colors.primary} />}
+                                  onPress={() => setSelectedApplicationId(v._id)}
+                                />
                                 <Button
                                   title="Inspect Details"
                                   variant="primary"

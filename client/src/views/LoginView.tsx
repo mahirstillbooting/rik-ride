@@ -14,6 +14,8 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Icon } from '../components/ui/Icon';
 import { spacing, borderRadius } from '../theme/spacing';
+import { ForgotPasswordModal } from './ForgotPasswordModal';
+import { RegisterModal } from './RegisterModal';
 
 export const LoginView: React.FC = () => {
   const { colors } = useTheme();
@@ -24,6 +26,10 @@ export const LoginView: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Modals for Forgot Password and Role Registration
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
 
   // Isolated development utility modal toggle (for dev testing only)
   const [showDevPanel, setShowDevPanel] = useState(false);
@@ -133,6 +139,12 @@ export const LoginView: React.FC = () => {
               }
             />
 
+            <View style={styles.forgotPassRow}>
+              <TouchableOpacity onPress={() => setShowForgotModal(true)}>
+                <Text style={[styles.forgotPassText, { color: colors.primary }]}>Forgot Password?</Text>
+              </TouchableOpacity>
+            </View>
+
             <Button
               title="Sign In to RIK-RIDE"
               onPress={handleLogin}
@@ -140,6 +152,20 @@ export const LoginView: React.FC = () => {
               size="lg"
               loading={loading}
               style={styles.signInButton}
+            />
+
+            <View style={styles.dividerRow}>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+              <Text style={[styles.dividerText, { color: colors.textMuted }]}>OR</Text>
+              <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+            </View>
+
+            <Button
+              title="Create RIK-RIDE Account / Sign Up"
+              onPress={() => setShowRegisterModal(true)}
+              variant="outline"
+              size="md"
+              icon={<Icon name="user-plus" size={16} color={colors.primary} />}
             />
           </CardBody>
         </Card>
@@ -228,6 +254,22 @@ export const LoginView: React.FC = () => {
           )}
         </View>
       </View>
+
+      <ForgotPasswordModal
+        visible={showForgotModal}
+        onClose={() => setShowForgotModal(false)}
+        onSuccessReturnLogin={() => {
+          setSeedNotice('Password reset successfully! You can now sign in with your new credentials.');
+        }}
+      />
+
+      <RegisterModal
+        visible={showRegisterModal}
+        onClose={() => setShowRegisterModal(false)}
+        onSuccessReturnLogin={(notice) => {
+          if (notice) setSeedNotice(notice);
+        }}
+      />
     </ScrollView>
   );
 };
@@ -298,6 +340,29 @@ const styles = StyleSheet.create({
   cardBody: {
     padding: spacing.lg,
     gap: spacing.sm,
+  },
+  forgotPassRow: {
+    alignItems: 'flex-end',
+    marginTop: -4,
+    marginBottom: 4,
+  },
+  forgotPassText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.xs,
+    gap: spacing.sm,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   alertBox: {
     flexDirection: 'row',

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { AuthStorage } from './AuthStorage';
 import { env } from '../config/env';
 import { UserRole, DriverOperatingMode } from '../navigation/roleConfig';
+import { locationApiService } from '../services/locationService';
 
 export type AuthState =
   | 'unauthenticated'
@@ -115,6 +116,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
+    try {
+      if (user?.role === 'DRIVER') {
+        await locationApiService.stopSharing();
+      }
+    } catch {}
     await AuthStorage.clearSession();
     setToken(null);
     setUser(null);

@@ -648,7 +648,57 @@ router.get('/applications/:id', async (req: AuthenticatedRequest, res: Response)
   try {
     const { id } = req.params;
 
-    // Check if ID matches User, Garage, or Vehicle
+    // 1. Check if ID matches SupportTicket
+    const { SupportTicket } = await import('../models/SupportTicket');
+    let ticket = null;
+    if (id.startsWith('TCK-')) {
+      ticket = await SupportTicket.findOne({ ticketId: id }).populate('userId', 'name phone email role accountStatus profileImage nidNumber dateOfBirth nidFrontDocumentRef nidBackDocumentRef').lean();
+    } else {
+      ticket = await SupportTicket.findById(id).populate('userId', 'name phone email role accountStatus profileImage nidNumber dateOfBirth nidFrontDocumentRef nidBackDocumentRef').catch(() => null);
+    }
+
+    if (ticket) {
+      const u: any = ticket.userId || {};
+      const documents: { type: string; title: string; url: string }[] = [];
+      if (ticket.supportingDocumentRef) documents.push({ type: 'SUPPORT_DOC', title: 'Supporting Document', url: ticket.supportingDocumentRef });
+      if (u.profileImage) documents.push({ type: 'PROFILE_PHOTO', title: 'User Profile Photo', url: u.profileImage });
+      if (u.nidFrontDocumentRef) documents.push({ type: 'NID_FRONT', title: 'User NID (Front)', url: u.nidFrontDocumentRef });
+      if (u.nidBackDocumentRef) documents.push({ type: 'NID_BACK', title: 'User NID (Back)', url: u.nidBackDocumentRef });
+
+      res.json({
+        success: true,
+        application: {
+          id: ticket._id.toString(),
+          ticketId: ticket.ticketId,
+          entityType: 'SUPPORT_TICKET',
+          title: `Support Request: ${ticket.requestedField} update (${ticket.ticketId})`,
+          role: ticket.userRole,
+          accountStatus: ticket.status,
+          rejectionReason: ticket.resolutionReason,
+          requestType: ticket.requestType,
+          requestedField: ticket.requestedField,
+          currentValue: ticket.currentValue,
+          proposedValue: ticket.proposedValue,
+          reason: ticket.reason,
+          applicant: {
+            id: u._id,
+            name: u.name || 'User',
+            phone: u.phone || 'N/A',
+            email: u.email || 'N/A',
+            profileImage: u.profileImage,
+          },
+          identity: {
+            legalName: u.name,
+            dateOfBirth: u.dateOfBirth,
+            nidNumber: u.nidNumber,
+          },
+          documents,
+        },
+      });
+      return;
+    }
+
+    // 2. Check if ID matches User (Driver, Garage Owner, Passenger, Applicant)
     const user = await User.findById(id).select('-passwordHash').lean();
     if (user) {
       let garageInfo = null;
@@ -658,7 +708,9 @@ router.get('/applications/:id', async (req: AuthenticatedRequest, res: Response)
         garageInfo = await Garage.findOne({ ownerId: user._id }).lean();
       } else if (user.role === 'DRIVER') {
         vehicleInfo = await Vehicle.findOne({ assignedDriverId: user._id }).lean();
-        const gd = await GarageDriver.findOne({ driverId: user._id, status: 'ACTIVE' }).populate('garageId', 'name garageId phone').lean();
+        const gd = await GarageDriver.findOne({ driverId: user._id, status: { $ne: 'TERMINATED' } })
+          .populate('garageId', 'name garageId phone address city area verificationStatus')
+          .lean();
         if (gd) (user as any).garageLink = gd.garageId;
       }
 
@@ -706,8 +758,20 @@ router.get('/applications/:id', async (req: AuthenticatedRequest, res: Response)
       return;
     }
 
-    const garage = await Garage.findById(id).populate('ownerId', 'name phone email nidNumber accountStatus').lean();
+    // 3. Check if ID matches Garage
+    const garage = await Garage.findById(id).populate('ownerId', 'name phone email nidNumber dateOfBirth profileImage nidFrontDocumentRef nidBackDocumentRef accountStatus').lean();
     if (garage) {
+      const owner: any = garage.ownerId || {};
+      const documents: { type: string; title: string; url: string }[] = [];
+      if (owner.profileImage) documents.push({ type: 'PROFILE_PHOTO', title: 'Owner Profile Photo', url: owner.profileImage });
+      if (owner.nidFrontDocumentRef) documents.push({ type: 'NID_FRONT', title: 'Owner NID (Front)', url: owner.nidFrontDocumentRef });
+      if (owner.nidBackDocumentRef) documents.push({ type: 'NID_BACK', title: 'Owner NID (Back)', url: owner.nidBackDocumentRef });
+
+      const [totalVehicles, activeDrivers] = await Promise.all([
+        Vehicle.countDocuments({ garageId: garage._id }),
+        GarageDriver.countDocuments({ garageId: garage._id, status: 'ACTIVE' }),
+      ]);
+
       res.json({
         success: true,
         application: {
@@ -716,43 +780,83 @@ router.get('/applications/:id', async (req: AuthenticatedRequest, res: Response)
           title: garage.name,
           garageId: garage.garageId,
           verificationStatus: garage.verificationStatus,
-          applicant: garage.ownerId,
+          applicant: {
+            id: owner._id,
+            name: owner.name || 'Garage Owner',
+            phone: owner.phone || garage.phone,
+            email: owner.email || 'N/A',
+            profileImage: owner.profileImage,
+          },
           identity: {
-            legalName: (garage.ownerId as any)?.name,
+            legalName: owner.name || garage.name,
             phone: garage.phone,
             address: garage.address,
             city: garage.city,
             area: garage.area,
+            nidNumber: owner.nidNumber || 'Not Submitted',
+            dateOfBirth: owner.dateOfBirth,
           },
-          documents: [],
+          documents,
           roleInfo: {
             capacity: garage.capacity,
             garageId: garage.garageId,
+            totalVehicles,
+            activeDrivers,
           },
         },
       });
       return;
     }
 
-    const vehicle = await Vehicle.findById(id).populate('assignedDriverId', 'name phone').populate('garageId', 'name garageId').lean();
+    // 4. Check if ID matches Vehicle
+    const vehicle = await Vehicle.findById(id)
+      .populate('assignedDriverId', 'name phone email nidNumber dateOfBirth profileImage nidFrontDocumentRef nidBackDocumentRef driverMode accountStatus')
+      .populate('garageId', 'name garageId phone address city area ownerId')
+      .lean();
+
     if (vehicle) {
+      const driver: any = vehicle.assignedDriverId || {};
+      const documents: { type: string; title: string; url: string }[] = [];
+      if (driver.profileImage) documents.push({ type: 'PROFILE_PHOTO', title: 'Driver Profile Photo', url: driver.profileImage });
+      if (driver.nidFrontDocumentRef) documents.push({ type: 'NID_FRONT', title: 'Driver NID (Front)', url: driver.nidFrontDocumentRef });
+      if (driver.nidBackDocumentRef) documents.push({ type: 'NID_BACK', title: 'Driver NID (Back)', url: driver.nidBackDocumentRef });
+
       res.json({
         success: true,
         application: {
           id: vehicle._id.toString(),
           entityType: 'VEHICLE',
-          title: `Vehicle ${vehicle.shortVehicleNumber}`,
+          title: `Rickshaw ${vehicle.shortVehicleNumber} (${vehicle.registrationNumber})`,
           vehicleId: vehicle.vehicleId,
+          shortVehicleNumber: vehicle.shortVehicleNumber,
+          registrationNumber: vehicle.registrationNumber,
           verificationStatus: vehicle.verificationStatus,
-          applicant: vehicle.assignedDriverId,
+          applicant: driver._id
+            ? {
+                id: driver._id,
+                name: driver.name,
+                phone: driver.phone,
+                email: driver.email,
+                profileImage: driver.profileImage,
+              }
+            : null,
           identity: {
+            legalName: driver.name || 'Unassigned Driver',
             registrationNumber: vehicle.registrationNumber,
             ownershipType: vehicle.ownershipType,
             modelName: vehicle.modelName,
+            manufacturingYear: vehicle.manufacturingYear,
+            city: vehicle.city,
+            area: vehicle.area,
+            nidNumber: driver.nidNumber,
+            dateOfBirth: driver.dateOfBirth,
           },
-          documents: [],
+          documents,
           roleInfo: {
             garage: vehicle.garageId,
+            ownershipType: vehicle.ownershipType,
+            qrIdentifier: vehicle.qrIdentifier,
+            status: vehicle.status,
           },
         },
       });

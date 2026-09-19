@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { Card, CardHeader, CardBody } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -9,6 +9,7 @@ import { Icon } from '../components/ui/Icon';
 import { Modal } from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { spacing, borderRadius } from '../theme/spacing';
+import { savedLocationApiService, SavedLocationItem } from '../services/savedLocationApiService';
 
 export interface SavedPlace {
   id: string;
@@ -23,55 +24,71 @@ export const PassengerSavedPlacesView: React.FC = () => {
   const { colors } = useTheme();
   const { showToast } = useToast();
 
-  const [places, setPlaces] = useState<SavedPlace[]>([
-    {
-      id: 'p1',
-      name: 'Home',
-      address: 'House 12, Road 4, Sector 7, Uttara, Dhaka',
-      type: 'HOME',
-      latitude: 23.8759,
-      longitude: 90.3795,
-    },
-    {
-      id: 'p2',
-      name: 'Work / Office',
-      address: 'Level 5, Gulshan Centre Point, Gulshan-2, Dhaka',
-      type: 'WORK',
-      latitude: 23.7925,
-      longitude: 90.4078,
-    },
-  ]);
+  const [places, setPlaces] = useState<SavedPlace[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [placeName, setPlaceName] = useState('');
   const [placeAddress, setPlaceAddress] = useState('');
   const [placeType, setPlaceType] = useState<'HOME' | 'WORK' | 'FAVORITE'>('FAVORITE');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleAddPlace = () => {
+  const loadSavedLocations = async () => {
+    setLoading(true);
+    const res = await savedLocationApiService.getSavedLocations();
+    if (res.success && Array.isArray(res.data)) {
+      const mapped: SavedPlace[] = res.data.map((item: SavedLocationItem) => ({
+        id: item._id || item.id || `p-${Date.now()}`,
+        name: item.name,
+        address: item.address,
+        type: item.type,
+        latitude: item.latitude,
+        longitude: item.longitude,
+      }));
+      setPlaces(mapped);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadSavedLocations();
+  }, []);
+
+  const handleAddPlace = async () => {
     if (!placeName.trim() || !placeAddress.trim()) {
       showToast('Please enter place name and address', 'warning');
       return;
     }
 
-    const newPlace: SavedPlace = {
-      id: `p-${Date.now()}`,
+    setIsSubmitting(true);
+    const res = await savedLocationApiService.addSavedLocation({
       name: placeName.trim(),
       address: placeAddress.trim(),
       type: placeType,
       latitude: 23.8103,
       longitude: 90.4125,
-    };
+    });
+    setIsSubmitting(false);
 
-    setPlaces((prev) => [...prev, newPlace]);
-    setShowAddModal(false);
-    setPlaceName('');
-    setPlaceAddress('');
-    showToast(`Saved place "${newPlace.name}" added successfully`, 'success');
+    if (res.success) {
+      setShowAddModal(false);
+      setPlaceName('');
+      setPlaceAddress('');
+      showToast(`Saved place "${placeName.trim()}" added successfully`, 'success');
+      loadSavedLocations();
+    } else {
+      showToast(res.error || 'Failed to save location', 'error');
+    }
   };
 
-  const handleDeletePlace = (id: string) => {
-    setPlaces((prev) => prev.filter((p) => p.id !== id));
-    showToast('Saved location removed', 'info');
+  const handleDeletePlace = async (id: string) => {
+    const res = await savedLocationApiService.deleteSavedLocation(id);
+    if (res.success) {
+      setPlaces((prev) => prev.filter((p) => p.id !== id));
+      showToast('Saved location removed', 'info');
+    } else {
+      showToast(res.error || 'Failed to remove location', 'error');
+    }
   };
 
   return (
@@ -92,7 +109,11 @@ export const PassengerSavedPlacesView: React.FC = () => {
           }
         />
         <CardBody style={{ gap: spacing.md }}>
-          {places.length === 0 ? (
+          {loading ? (
+            <View style={{ padding: spacing.xl, alignItems: 'center' }}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : places.length === 0 ? (
             <View style={{ padding: spacing.lg, alignItems: 'center', gap: spacing.sm }}>
               <Icon name="map-pin" size={32} color={colors.textMuted} />
               <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textPrimary }}>

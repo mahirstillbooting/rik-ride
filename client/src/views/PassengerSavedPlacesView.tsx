@@ -77,7 +77,7 @@ export const PassengerSavedPlacesView: React.FC = () => {
       showToast(`Saved place "${placeName.trim()}" added successfully`, 'success');
       loadSavedLocations();
     } else {
-      showToast(res.error || 'Failed to save location', 'error');
+      showToast(res.error || 'Failed to save location', 'danger');
     }
   };
 
@@ -87,7 +87,7 @@ export const PassengerSavedPlacesView: React.FC = () => {
       setPlaces((prev) => prev.filter((p) => p.id !== id));
       showToast('Saved location removed', 'info');
     } else {
-      showToast(res.error || 'Failed to remove location', 'error');
+      showToast(res.error || 'Failed to remove location', 'danger');
     }
   };
 

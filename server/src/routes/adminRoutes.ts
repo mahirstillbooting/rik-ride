@@ -599,6 +599,34 @@ router.post('/approval', async (req: AuthenticatedRequest, res: Response): Promi
       },
     });
 
+    // Send operational notification
+    try {
+      const { NotificationService } = await import('../services/notificationService');
+      let notifyUserId: string | null = null;
+      let title = `${entityType} Application ${newStatus}`;
+      let msg = `Your ${entityType.toLowerCase()} application has been updated to ${newStatus}.${reason ? ' Reason: ' + reason : ''}`;
+
+      if (entityType === 'USER') {
+        notifyUserId = entityId;
+      } else if (entityType === 'GARAGE') {
+        const g = await Garage.findById(entityId);
+        if (g && g.ownerId) notifyUserId = g.ownerId.toString();
+      } else if (entityType === 'VEHICLE') {
+        const v = await Vehicle.findById(entityId);
+        if (v && v.assignedDriverId) notifyUserId = v.assignedDriverId.toString();
+        else if (v && v.garageId) {
+          const g = await Garage.findById(v.garageId);
+          if (g && g.ownerId) notifyUserId = g.ownerId.toString();
+        }
+      }
+
+      if (notifyUserId) {
+        await NotificationService.createNotification(notifyUserId, title, msg, 'SYSTEM');
+      }
+    } catch (notifErr) {
+      console.error('[AdminRoutes] Error sending approval notification:', notifErr);
+    }
+
     res.json({
       success: true,
       message: `${targetEntityName} successfully updated from ${previousStatus} to ${newStatus}`,

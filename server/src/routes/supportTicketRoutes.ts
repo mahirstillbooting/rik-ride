@@ -213,6 +213,14 @@ router.post('/admin/:id/resolve', requireRole('ADMIN'), async (req: Authenticate
         },
       });
 
+      const { NotificationService } = await import('../services/notificationService');
+      await NotificationService.createNotification(
+        targetUser._id.toString(),
+        'Support Ticket Approved',
+        `Your support request for ${ticket.requestedField} update (Ticket: ${ticket.ticketId}) has been approved.`,
+        'SYSTEM'
+      );
+
       res.json({
         success: true,
         message: `Support ticket ${ticket.ticketId} APPROVED. User ${ticket.requestedField} updated to "${newVal}".`,
@@ -237,6 +245,14 @@ router.post('/admin/:id/resolve', requireRole('ADMIN'), async (req: Authenticate
           resolutionReason: ticket.resolutionReason,
         },
       });
+
+      const { NotificationService } = await import('../services/notificationService');
+      await NotificationService.createNotification(
+        targetUser._id.toString(),
+        'Support Ticket Rejected',
+        `Your support request (Ticket: ${ticket.ticketId}) was rejected. Reason: ${ticket.resolutionReason}`,
+        'SYSTEM'
+      );
 
       res.json({
         success: true,

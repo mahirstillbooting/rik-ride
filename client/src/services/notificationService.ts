@@ -83,6 +83,24 @@ class ClientNotificationService {
       return { success: false, error: e.message || 'Failed to mark all notifications read' };
     }
   }
+
+  /**
+   * Register device Expo push token with backend
+   */
+  async registerPushToken(pushToken: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const headers = await this.getHeaders();
+      const res = await fetch(`${env.apiUrl}/api/notifications/push-token`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ pushToken }),
+      });
+      const data = await res.json();
+      return data;
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Failed to register push token' };
+    }
+  }
 }
 
 export const clientNotificationService = new ClientNotificationService();

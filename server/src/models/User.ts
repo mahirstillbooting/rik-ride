@@ -30,6 +30,7 @@ export interface IUser extends Document {
   profileImage?: string;
   rejectionReason?: string;
   rejectionDate?: Date;
+  pushToken?: string;
   lastLoginAt?: Date;
   metadata?: Record<string, unknown>;
   createdAt: Date;
@@ -82,6 +83,7 @@ const UserSchema = new Schema<IUser>(
     profileImage: { type: String },
     rejectionReason: { type: String, trim: true },
     rejectionDate: { type: Date },
+    pushToken: { type: String, trim: true },
     lastLoginAt: { type: Date },
     metadata: { type: Schema.Types.Mixed },
   },

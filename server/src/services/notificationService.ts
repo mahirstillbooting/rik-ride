@@ -79,6 +79,31 @@ export class NotificationService {
       readStatus: false,
       metadata,
     });
+
+    // Dispatch Expo Push Notification if recipient user has registered pushToken
+    try {
+      const { User } = await import('../models/User');
+      const recipientUser = await User.findById(recipientId).select('pushToken').lean();
+      if (recipientUser && recipientUser.pushToken && recipientUser.pushToken.startsWith('ExponentPushToken')) {
+        await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            to: recipientUser.pushToken,
+            sound: 'default',
+            title,
+            body: message,
+            data: { notificationId: notification._id, type, metadata },
+          }),
+        });
+      }
+    } catch (pushErr) {
+      console.warn('[NotificationService] Expo push dispatch notice:', pushErr);
+    }
+
     return notification;
   }
 }

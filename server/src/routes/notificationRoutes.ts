@@ -72,4 +72,33 @@ router.post('/mark-all-read', requireAuth, async (req: AuthenticatedRequest, res
   }
 });
 
+/**
+ * POST /api/notifications/push-token
+ * Register device Expo push token for authenticated user
+ */
+router.post('/push-token', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { pushToken } = req.body;
+
+    if (!pushToken || typeof pushToken !== 'string') {
+      return res.status(400).json({ success: false, error: 'Push token string is required.' });
+    }
+
+    const { User } = await import('../models/User');
+    await User.findByIdAndUpdate(userId, { pushToken: pushToken.trim() });
+
+    return res.json({
+      success: true,
+      message: 'Device push token registered successfully.',
+    });
+  } catch (error: any) {
+    console.error('Error registering push token:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to register push token',
+    });
+  }
+});
+
 export default router;

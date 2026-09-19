@@ -281,6 +281,136 @@ export const AdminApplicationDetailView: React.FC<AdminApplicationDetailViewProp
             </CardBody>
           </Card>
 
+          {/* SECTION 4: ROLE & ENTITY SPECIFIC DETAILS */}
+          {appData.roleInfo && (
+            <Card variant="default" style={styles.card}>
+              <CardHeader
+                title="Section 4. Entity & Operational Specifications"
+                subtitle="Role-specific garage, vehicle, driver linkage, or support ticket data"
+                icon={<Icon name="briefcase" size={18} color={colors.primary} />}
+              />
+              <CardBody style={{ gap: spacing.md }}>
+                <View style={[styles.infoGrid, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  {appData.entityType === 'GARAGE' && (
+                    <>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Garage Custom ID</Text>
+                        <Text style={[styles.infoValue, { color: colors.primary }]}>{appData.roleInfo.garageId || 'N/A'}</Text>
+                      </View>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Vehicle Capacity</Text>
+                        <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{appData.roleInfo.capacity || 10} Rickshaws</Text>
+                      </View>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Total Registered Rickshaws</Text>
+                        <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{appData.roleInfo.totalVehicles ?? 0}</Text>
+                      </View>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Active Confirmed Drivers</Text>
+                        <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{appData.roleInfo.activeDrivers ?? 0}</Text>
+                      </View>
+                    </>
+                  )}
+
+                  {appData.entityType === 'VEHICLE' && (
+                    <>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Short Vehicle Number</Text>
+                        <Text style={[styles.infoValue, { color: colors.primary }]}>{appData.shortVehicleNumber || 'N/A'}</Text>
+                      </View>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Official Registration Number</Text>
+                        <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{appData.registrationNumber || 'N/A'}</Text>
+                      </View>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Ownership Mode</Text>
+                        <Badge label={appData.roleInfo.ownershipType || 'GARAGE_REGISTERED'} variant="info" />
+                      </View>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Model & Manufacturing Year</Text>
+                        <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                          {appData.identity?.modelName || 'Electric Rickshaw'} ({appData.identity?.manufacturingYear || '2024'})
+                        </Text>
+                      </View>
+                      {appData.roleInfo.garage && (
+                        <View style={styles.infoItem}>
+                          <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Associated Garage Hub</Text>
+                          <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                            {appData.roleInfo.garage.name} ({appData.roleInfo.garage.garageId || 'Hub'})
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+
+                  {appData.entityType === 'SUPPORT_TICKET' && (
+                    <>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Ticket Reference ID</Text>
+                        <Text style={[styles.infoValue, { color: colors.primary }]}>{appData.ticketId}</Text>
+                      </View>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Requested Field to Modify</Text>
+                        <Badge label={appData.requestedField} variant="warning" />
+                      </View>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Current Value in System</Text>
+                        <Text style={[styles.infoValue, { color: colors.textMuted }]}>{appData.currentValue || '(Empty)'}</Text>
+                      </View>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Proposed New Value</Text>
+                        <Text style={[styles.infoValue, { color: colors.success, fontWeight: '800' }]}>{appData.proposedValue}</Text>
+                      </View>
+                      <View style={{ width: '100%', marginTop: 6 }}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>User Explanation & Reason</Text>
+                        <Text style={[styles.infoValue, { color: colors.textPrimary, marginTop: 2 }]}>{appData.reason}</Text>
+                      </View>
+                    </>
+                  )}
+
+                  {appData.entityType === 'USER' && (
+                    <>
+                      <View style={styles.infoItem}>
+                        <Text style={[styles.infoLabel, { color: colors.textMuted }]}>User Platform Role</Text>
+                        <Badge label={appData.role} variant="info" />
+                      </View>
+                      {appData.driverMode && (
+                        <View style={styles.infoItem}>
+                          <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Driver Operating Mode</Text>
+                          <Badge label={appData.driverMode} variant="neutral" />
+                        </View>
+                      )}
+                      {appData.roleInfo?.garage && (
+                        <View style={styles.infoItem}>
+                          <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Owned Garage Hub</Text>
+                          <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                            {appData.roleInfo.garage.name} ({appData.roleInfo.garage.garageId || 'Hub'})
+                          </Text>
+                        </View>
+                      )}
+                      {appData.roleInfo?.garageLink && (
+                        <View style={styles.infoItem}>
+                          <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Associated Garage Hub</Text>
+                          <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                            {appData.roleInfo.garageLink.name} ({appData.roleInfo.garageLink.garageId || 'Hub'})
+                          </Text>
+                        </View>
+                      )}
+                      {appData.roleInfo?.vehicle && (
+                        <View style={styles.infoItem}>
+                          <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Assigned Rickshaw</Text>
+                          <Text style={[styles.infoValue, { color: colors.textPrimary }]}>
+                            {appData.roleInfo.vehicle.shortVehicleNumber} ({appData.roleInfo.vehicle.registrationNumber})
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+                </View>
+              </CardBody>
+            </Card>
+          )}
+
           {/* SECTION 4 & ACTION BAR */}
           <Card variant="default" style={styles.card}>
             <CardHeader

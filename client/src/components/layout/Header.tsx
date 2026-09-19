@@ -7,6 +7,7 @@ import { useBreakpoint } from '../../theme/breakpoints';
 import { borderRadius, spacing } from '../../theme/spacing';
 import { UserRole } from '../../navigation/roleConfig';
 import { Icon } from '../ui/Icon';
+import { LanguageSwitch } from '../ui/LanguageSwitch';
 
 interface HeaderProps {
   onToggleMobileMenu?: () => void;
@@ -135,6 +136,9 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu }) => {
             {mode === 'dark' ? 'Light' : 'Dark'}
           </Text>
         </TouchableOpacity>
+
+        {/* Language Preference Switch Pill */}
+        <LanguageSwitch />
       </View>
     </View>
   );

@@ -30,13 +30,13 @@ export const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
     if (!allowedTypes.includes(file.type.toLowerCase())) {
-      showToast('Invalid format. Please select a JPEG, PNG, or WebP image.', 'error');
+      showToast('Invalid format. Please select a JPEG, PNG, or WebP image.', 'danger');
       return;
     }
 
     const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
     if (file.size > MAX_SIZE_BYTES) {
-      showToast(`Image size exceeds 5MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB).`, 'error');
+      showToast(`Image size exceeds 5MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB).`, 'danger');
       return;
     }
 
@@ -52,7 +52,7 @@ export const ProfilePictureUploader: React.FC<ProfilePictureUploaderProps> = ({
     };
     reader.onerror = () => {
       setUploading(false);
-      showToast('Failed to read image file', 'error');
+      showToast('Failed to read image file', 'danger');
     };
     reader.readAsDataURL(file);
   };
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     resizeMode: 'cover',
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.4)',
     alignItems: 'center',
     justifyContent: 'center',

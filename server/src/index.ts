@@ -19,6 +19,7 @@ import notificationRoutes from './routes/notificationRoutes';
 import qrRoutes from './routes/qrRoutes';
 import uploadRoutes from './routes/uploadRoutes';
 import supportTicketRoutes from './routes/supportTicketRoutes';
+import savedLocationRoutes from './routes/savedLocationRoutes';
 
 validateEnv();
 
@@ -41,6 +42,7 @@ app.use('/api/garage', garageRoutes);
 app.use('/api/driver', driverRoutes);
 app.use('/api/driver/location', locationRoutes);
 app.use('/api/passenger/location', passengerLocationRoutes);
+app.use('/api/passenger/saved-locations', savedLocationRoutes);
 app.use('/api/ride', rideRoutes);
 app.use('/api/safety', safetyRoutes);
 app.use('/api/notifications', notificationRoutes);

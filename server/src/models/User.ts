@@ -90,6 +90,8 @@ const UserSchema = new Schema<IUser>(
   }
 );
 
+UserSchema.index({ role: 1, accountStatus: 1 });
+
 UserSchema.methods.toAuthJSON = function () {
   const user = this.toObject();
   delete user.passwordHash;
